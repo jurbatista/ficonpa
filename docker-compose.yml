@@ -1,0 +1,78 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ficonpa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ficonpa}
+      POSTGRES_DB: ${POSTGRES_DB:-ficonpa}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ficonpa} -d ${POSTGRES_DB:-ficonpa}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build: .
+    command: ["npx", "drizzle-kit", "migrate"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-ficonpa}:${POSTGRES_PASSWORD:-ficonpa}@postgres:5432/${POSTGRES_DB:-ficonpa}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  web:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-ficonpa}:${POSTGRES_PASSWORD:-ficonpa}@postgres:5432/${POSTGRES_DB:-ficonpa}
+      REDIS_URL: redis://redis:6379
+      ATTACHMENT_DIR: /app/data/attachments
+    ports:
+      - "3000:3000"
+    volumes:
+      - attachments_data:/app/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: ["npm", "run", "worker"]
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-ficonpa}:${POSTGRES_PASSWORD:-ficonpa}@postgres:5432/${POSTGRES_DB:-ficonpa}
+      REDIS_URL: redis://redis:6379
+      ATTACHMENT_DIR: /app/data/attachments
+    volumes:
+      - attachments_data:/app/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  attachments_data:
