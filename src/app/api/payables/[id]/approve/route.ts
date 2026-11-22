@@ -24,7 +24,11 @@ export async function POST(
       .set({ status: "APPROVED", error: null, updatedAt: new Date() })
       .where(eq(payables.id, id));
 
-    await enqueue(QUEUE_NAMES.postPayable, { payableId: id, actor: "admin" });
+    await enqueue(
+      QUEUE_NAMES.postPayable,
+      { payableId: id, actor: "admin" },
+      { attempts: 1 },
+    );
     await logAudit("payable_approved", {
       entity: "payable",
       entityId: id,

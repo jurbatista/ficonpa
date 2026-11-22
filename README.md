@@ -56,6 +56,12 @@ npm run worker
 
 A senha inicial é `APP_PASSWORD` (padrão `ficonpa`). Troque antes de expor o app.
 
+Para não guardar a senha em texto puro, gere um hash e use `APP_PASSWORD_HASH`:
+
+```bash
+npm run password:hash -- 'sua-senha-forte'
+```
+
 ### Variáveis obrigatórias
 
 | Variável | Para que serve |

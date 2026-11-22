@@ -120,11 +120,11 @@ export default function Sidebar({
                 <div className='px-4 py-4'>
                     <div className='rounded-2xl bg-background-gray-primary px-4 py-4'>
                         <p className='text-sm leading-5 font-semibold text-text-primary'>
-                            Retenção de 90 dias
+                            Retenção configurável
                         </p>
                         <p className='mt-1 text-xs leading-5 text-text-tertiary'>
                             Boletos e registros são apagados do banco e do disco após o
-                            período de retenção.
+                            período definido nas configurações.
                         </p>
                         <Link
                             href='/configuracoes'

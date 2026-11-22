@@ -141,7 +141,11 @@ export async function syncContaAzulCatalogs(): Promise<SyncResult> {
   try {
     costCenters = await fetchAllPages<RawCostCenter>("/v1/financeiro/centros-de-custo");
   } catch {
-    warnings.push("Não foi possível listar centros de custo.");
+    try {
+      costCenters = await fetchAllPages<RawCostCenter>("/v1/centro-de-custo");
+    } catch {
+      warnings.push("Não foi possível listar centros de custo.");
+    }
   }
   const validCostCenters = costCenters.filter((item) => item.id);
   for (const center of validCostCenters) {
