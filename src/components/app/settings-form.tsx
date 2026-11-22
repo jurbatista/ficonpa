@@ -122,49 +122,6 @@ export function SettingsForm({ initial }: { initial: AppSettings }) {
         </div>
       </Section>
 
-      <Section title="Modelos de IA" description="Qwen para extração; Jev para decisão e confiança.">
-        <div className="space-y-5">
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-card-border px-4 py-3">
-            <div>
-              <p className="text-sm font-medium text-text-primary">Usar Jev nas decisões</p>
-              <p className="text-xs text-text-secondary">
-                Se desativado, o sistema usa apenas as regras determinísticas (fail closed).
-              </p>
-            </div>
-            <Toggle
-              checked={form.jevEnabled}
-              onChange={(event) =>
-                setForm((previous) => ({ ...previous, jevEnabled: event.target.checked }))
-              }
-              aria-label="Usar Jev"
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block text-sm">
-              <span className="mb-1.5 block font-medium text-text-primary">Modelo Jev</span>
-              <input
-                className={fieldClass}
-                value={form.jevModel}
-                onChange={(event) =>
-                  setForm((previous) => ({ ...previous, jevModel: event.target.value }))
-                }
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1.5 block font-medium text-text-primary">Modelo Qwen</span>
-              <input
-                className={fieldClass}
-                value={form.qwenModel}
-                onChange={(event) =>
-                  setForm((previous) => ({ ...previous, qwenModel: event.target.value }))
-                }
-              />
-            </label>
-          </div>
-        </div>
-      </Section>
-
       <Section
         title="Retenção de dados"
         description="Conta a partir da entrada no sistema ou do lançamento, o que ocorrer por último."

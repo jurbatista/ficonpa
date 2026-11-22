@@ -361,17 +361,17 @@ export function PayableDetail({
         </div>
 
         <div className="rounded-xl border border-card-border bg-card-background p-5">
-          <h3 className="text-sm font-semibold text-text-primary">Análise da IA</h3>
+          <h3 className="text-sm font-semibold text-text-primary">Análise do documento</h3>
           <p className="mt-0.5 text-xs text-text-secondary">
-            Parecer do Jev e dados extraídos do documento.
+            Dados extraídos e classificação do documento.
           </p>
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <div>
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-tertiary">
-                Jev
+                Análise
               </p>
               <pre className="max-h-72 overflow-auto rounded-lg bg-background-gray-primary p-3 text-xs text-text-secondary">
-                {JSON.stringify(data.jev ?? { erro: "Sem parecer registrado" }, null, 2)}
+                {JSON.stringify(data.jev ?? { erro: "Sem análise registrada" }, null, 2)}
               </pre>
             </div>
             <div>

@@ -127,14 +127,6 @@ export function maskSecret(value: string | null): string | null {
   return `${value.slice(0, 3)}••••••${value.slice(-3)}`;
 }
 
-export type PasswordSource = "database" | "environment" | "default";
-
-export async function getPasswordSource(): Promise<PasswordSource> {
-  if (plain(await readSetting(KEYS.appPasswordHash))) return "database";
-  if (optionalEnv("APP_PASSWORD_HASH") || optionalEnv("APP_PASSWORD")) return "environment";
-  return "default";
-}
-
 export type IntegrationInput = {
   openrouterApiKey?: string;
   contaAzulClientId?: string;

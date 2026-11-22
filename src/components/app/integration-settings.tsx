@@ -91,7 +91,7 @@ export function IntegrationSettings({ data }: { data: IntegrationSettingsData })
     <form onSubmit={save} className="space-y-5">
       <Section
         title="OpenRouter"
-        description="Chave usada pelo Qwen (extração) e pelo Jev (decisão e confiança)."
+        description="Chave usada na extração automática dos dados dos boletos."
       >
         <div className="space-y-4">
           <label className="block text-sm">
@@ -196,11 +196,7 @@ export function IntegrationSettings({ data }: { data: IntegrationSettingsData })
         </div>
       </Section>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="max-w-xl text-xs text-text-tertiary">
-          Valores salvos aqui têm prioridade sobre as variáveis de ambiente. Ao remover um valor, o
-          sistema volta a usar a variável de ambiente, se existir.
-        </p>
+      <div className="flex justify-end">
         <button
           type="submit"
           disabled={busy}

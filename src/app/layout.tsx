@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     default: "ficonpa — contas a pagar automáticas",
   },
   description:
-    "Leitura de boletos por e-mail, triagem com IA e lançamento de contas a pagar no Conta Azul.",
+    "Leitura de boletos por e-mail, triagem automática e lançamento de contas a pagar no Conta Azul.",
 };
 
 export default function RootLayout({

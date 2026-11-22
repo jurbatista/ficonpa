@@ -1,14 +1,12 @@
 # ficonpa
 
-Leitor de boletos por e-mail que lança contas a pagar no Conta Azul, com triagem por IA e revisão humana opcional.
+Leitor de boletos por e-mail que lança contas a pagar no Conta Azul, com triagem automática e revisão humana opcional.
 
 ## O que ele faz
 
 1. Conecta uma ou mais caixas de e-mail via IMAP (senha de aplicativo).
 2. Varre **apenas anexos PDF** — o corpo do e-mail não é armazenado.
-3. Passa cada PDF por uma triagem determinística (linha digitável, código de barras, valor e vencimento) e por IA:
-   - **Qwen** (via OpenRouter) para extrair os campos do boleto.
-   - **Jev** (`typesafe/jev-1.14`) para decidir se é boleto, o tipo, a qualidade da extração, o fornecedor e se é seguro lançar automaticamente.
+3. Passa cada PDF por uma triagem determinística (linha digitável, código de barras, valor e vencimento) e por uma etapa de extração complementar dos campos.
 4. Identifica o fornecedor em **qualquer pessoa cadastrada** no Conta Azul (match exato por CNPJ ou por nome).
 5. Classifica categoria, conta financeira e centro de custo por regras.
 6. Cria a conta a pagar no Conta Azul via `POST /v1/financeiro/contas-a-pagar`, com `referencia_externa` para idempotência.
@@ -23,7 +21,7 @@ Leitor de boletos por e-mail que lança contas a pagar no Conta Azul, com triage
 - PostgreSQL + Drizzle ORM.
 - Redis + BullMQ (sincronização de e-mail, processamento de documentos, lançamento e retenção).
 - IMAP (`imapflow` + `mailparser`), PDF (`unpdf`).
-- OpenRouter para Qwen e Jev.
+- OpenRouter para extração complementar dos dados.
 - Auth simples por senha única + JWT em cookie httpOnly (`jose`).
 - Credenciais sensíveis criptografadas com AES-256-GCM.
 
@@ -31,10 +29,10 @@ Leitor de boletos por e-mail que lança contas a pagar no Conta Azul, com triage
 
 - **Painel** — visão geral, toggle global de lançamento automático e atividade recente.
 - **Contas a pagar** — abas “Todos”, “Na fila”, “Lançados”, “Rejeitados” e “Precisa de atenção”.
-- **Detalhe** — revisão dos campos, pré-visualização do PDF, parecer do Jev, aprovar/rejeitar/reprocessar.
+- **Detalhe** — revisão dos campos, pré-visualização do PDF, análise do documento, aprovar/rejeitar/reprocessar.
 - **E-mails** — cadastro, teste de conexão, sincronização manual e exclusão de caixas IMAP.
 - **Conta Azul** — OAuth, status do token e sincronização de pessoas, categorias, contas e centros de custo.
-- **Configurações** — integrações (OpenRouter e Conta Azul), senha de acesso, limiares, modelos, retenção e limpeza manual.
+- **Configurações** — integrações (OpenRouter e Conta Azul), senha de acesso, limiares, retenção e limpeza manual.
 
 ## Rodando localmente
 
@@ -66,8 +64,7 @@ npm run password:hash -- 'sua-senha-forte'
 ### Variáveis de ambiente
 
 As credenciais de integração e a senha podem ser preenchidas em **Configurações** e ficam
-criptografadas no banco. Valores salvos pela interface têm prioridade sobre o `.env`; ao remover um
-valor, o sistema volta a usar a variável de ambiente, se existir.
+criptografadas no banco.
 
 | Variável | Onde configurar |
 | --- | --- |
@@ -75,10 +72,9 @@ valor, o sistema volta a usar a variável de ambiente, se existir.
 | `CONTA_AZUL_CLIENT_ID` / `CONTA_AZUL_CLIENT_SECRET` | Configurações → Conta Azul (ou `.env`) |
 | `CONTA_AZUL_REDIRECT_URI` | Configurações → Conta Azul (ou `.env`) |
 | `OPENROUTER_API_KEY` | Configurações → OpenRouter (ou `.env`) |
-| `OPENROUTER_MODEL` / `JEV_MODEL` | Configurações → Modelos de IA (ou `.env` como padrão inicial) |
 
-Estas variáveis são de infraestrutura e aparecem como **somente leitura** em Configurações.
-Alterações exigem editar o `.env` e reiniciar os serviços:
+Estas variáveis são de infraestrutura e devem ser definidas no `.env`. Alterações exigem reiniciar
+os serviços:
 
 | Variável | Para que serve |
 | --- | --- |
@@ -111,7 +107,7 @@ Uma instalação atende **uma empresa** do Conta Azul.
   - qualidade da extração ≥ 2;
   - categoria e conta financeira resolvidas;
   - nenhuma duplicidade (fornecedor + valor + vencimento).
-- Qualquer falha, recusa ou baixa confiança do Jev → revisão humana (**fail closed**).
+- Qualquer falha, recusa ou baixa confiança da análise automática → revisão humana (**fail closed**).
 
 ## Produção (Docker)
 
@@ -144,7 +140,7 @@ src/
   components/common/    layout do tema (sidebar, header)
   components/tailgrids/ UI kit do tema
   db/schema.ts          modelo Drizzle
-  lib/                  auth, cripto, filas, IMAP, boleto, IA, regras, pipeline
+  lib/                  auth, cripto, filas, IMAP, boleto, regras, pipeline
   workers/index.ts      workers BullMQ
 drizzle/                migrations SQL
 ```

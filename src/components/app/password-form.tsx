@@ -5,15 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { fieldClass, Section } from "@/components/app/ui";
 
-type PasswordSource = "database" | "environment" | "default";
-
-const SOURCE_TEXT: Record<PasswordSource, string> = {
-  database: "Senha personalizada salva neste sistema.",
-  environment: "Usando a senha definida por variável de ambiente (APP_PASSWORD ou APP_PASSWORD_HASH).",
-  default: "Usando a senha padrão. Recomendado definir uma senha forte.",
-};
-
-export function PasswordForm({ source }: { source: PasswordSource }) {
+export function PasswordForm() {
   const router = useRouter();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -60,10 +52,6 @@ export function PasswordForm({ source }: { source: PasswordSource }) {
         description="Senha única usada para entrar no ficonpa. Fica armazenada como hash scrypt."
       >
         <div className="space-y-4">
-          <div className="rounded-lg border border-card-border px-4 py-3 text-xs text-text-secondary">
-            {SOURCE_TEXT[source]}
-          </div>
-
           <div className="grid gap-4 sm:grid-cols-3">
             <label className="block text-sm">
               <span className="mb-1.5 block font-medium text-text-primary">Senha atual</span>
