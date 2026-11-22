@@ -34,7 +34,7 @@ Leitor de boletos por e-mail que lança contas a pagar no Conta Azul, com triage
 - **Detalhe** — revisão dos campos, pré-visualização do PDF, parecer do Jev, aprovar/rejeitar/reprocessar.
 - **E-mails** — cadastro, teste de conexão, sincronização manual e exclusão de caixas IMAP.
 - **Conta Azul** — OAuth, status do token e sincronização de pessoas, categorias, contas e centros de custo.
-- **Configurações** — limiares, modelos, retenção e limpeza manual.
+- **Configurações** — integrações (OpenRouter e Conta Azul), senha de acesso, limiares, modelos, retenção e limpeza manual.
 
 ## Rodando localmente
 
@@ -54,7 +54,8 @@ npm run dev         # http://localhost:3000
 npm run worker
 ```
 
-A senha inicial é `APP_PASSWORD` (padrão `ficonpa`). Troque antes de expor o app.
+A senha inicial é `APP_PASSWORD` (padrão `ficonpa`). Troque antes de expor o app — também é
+possível alterá-la em **Configurações → Senha de acesso**.
 
 Para não guardar a senha em texto puro, gere um hash e use `APP_PASSWORD_HASH`:
 
@@ -62,25 +63,37 @@ Para não guardar a senha em texto puro, gere um hash e use `APP_PASSWORD_HASH`:
 npm run password:hash -- 'sua-senha-forte'
 ```
 
-### Variáveis obrigatórias
+### Variáveis de ambiente
+
+As credenciais de integração e a senha podem ser preenchidas em **Configurações** e ficam
+criptografadas no banco. Valores salvos pela interface têm prioridade sobre o `.env`; ao remover um
+valor, o sistema volta a usar a variável de ambiente, se existir.
+
+| Variável | Onde configurar |
+| --- | --- |
+| `APP_PASSWORD` ou `APP_PASSWORD_HASH` | Configurações → Senha de acesso (ou `.env` como fallback) |
+| `CONTA_AZUL_CLIENT_ID` / `CONTA_AZUL_CLIENT_SECRET` | Configurações → Conta Azul (ou `.env`) |
+| `CONTA_AZUL_REDIRECT_URI` | Configurações → Conta Azul (ou `.env`) |
+| `OPENROUTER_API_KEY` | Configurações → OpenRouter (ou `.env`) |
+| `OPENROUTER_MODEL` / `JEV_MODEL` | Configurações → Modelos de IA (ou `.env` como padrão inicial) |
+
+Estas variáveis são de infraestrutura e aparecem como **somente leitura** em Configurações.
+Alterações exigem editar o `.env` e reiniciar os serviços:
 
 | Variável | Para que serve |
 | --- | --- |
 | `DATABASE_URL` | Conexão PostgreSQL |
 | `REDIS_URL` | Conexão Redis (BullMQ) |
 | `AUTH_SECRET` | Assinatura do JWT de sessão |
-| `APP_PASSWORD` ou `APP_PASSWORD_HASH` | Senha de acesso ao painel |
 | `APP_ENCRYPTION_KEY` | Criptografia de tokens e senhas IMAP |
-| `CONTA_AZUL_CLIENT_ID` / `CONTA_AZUL_CLIENT_SECRET` | OAuth do Conta Azul |
-| `CONTA_AZUL_REDIRECT_URI` | Deve ser exatamente `APP_URL/api/conta-azul/callback` |
-| `OPENROUTER_API_KEY` | Qwen (extração) e Jev (decisão) |
+| `APP_URL` | URL pública usada em redirecionamentos |
 | `ATTACHMENT_DIR` | Pasta dos PDFs (no Docker: `/app/data/attachments`) |
 
 ## Conta Azul
 
 1. Crie um aplicativo no Portal do Desenvolvedor do Conta Azul.
 2. Cadastre a URL de redirecionamento: `https://SEU_DOMINIO/api/conta-azul/callback`.
-3. Preencha `CONTA_AZUL_CLIENT_ID`, `CONTA_AZUL_CLIENT_SECRET` e `CONTA_AZUL_REDIRECT_URI`.
+3. Preencha Client ID, Client Secret e URL de redirecionamento em **Configurações → Conta Azul**.
 4. No painel, abra **Conta Azul → Conectar Conta Azul** e autorize.
 5. Clique em **Sincronizar cadastros**.
 

@@ -17,7 +17,7 @@ import { isDuplicatePayable } from "@/lib/rules/dedupe";
 import { getSettings } from "@/lib/settings";
 import { postPayable } from "@/lib/payables/post";
 import { logAudit } from "@/lib/audit";
-import { optionalEnv } from "@/lib/env";
+import { getOpenRouterApiKey } from "@/lib/config";
 
 export type ProcessResult = {
   documentId: string;
@@ -115,7 +115,7 @@ export async function processAttachment(
     let qwen: QwenExtraction | null = null;
     let qwenError: string | null = null;
 
-    if (optionalEnv("OPENROUTER_API_KEY")) {
+    if (await getOpenRouterApiKey()) {
       try {
         qwen = await extractWithQwen({
           model: settings.qwenModel,
@@ -128,7 +128,7 @@ export async function processAttachment(
         qwenError = error instanceof Error ? error.message : String(error);
       }
     } else {
-      qwenError = "OPENROUTER_API_KEY ausente: usando apenas o parser determinístico.";
+      qwenError = "Chave da OpenRouter ausente: usando apenas o parser determinístico.";
     }
 
     const linhaDigitavel = textData.linhaDigitavel ?? qwen?.linha_digitavel ?? null;

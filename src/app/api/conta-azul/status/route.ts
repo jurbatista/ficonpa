@@ -7,7 +7,7 @@ export async function GET() {
   const connection = await getConnection();
   const catalogs = connection ? await countCatalogs() : null;
   return ok({
-    configured: isContaAzulConfigured(),
+    configured: await isContaAzulConfigured(),
     connected: Boolean(connection),
     companyName: connection?.companyName ?? null,
     expiresAt: connection?.expiresAt ?? null,

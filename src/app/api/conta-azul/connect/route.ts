@@ -8,14 +8,14 @@ import {
 import { fail } from "@/lib/api";
 
 export async function GET() {
-  if (!isContaAzulConfigured()) {
+  if (!(await isContaAzulConfigured())) {
     return fail(
-      "Configure CONTA_AZUL_CLIENT_ID, CONTA_AZUL_CLIENT_SECRET e CONTA_AZUL_REDIRECT_URI.",
+      "Configure o Client ID e o Client Secret do Conta Azul em Configurações.",
       400,
     );
   }
   const state = randomBytes(16).toString("hex");
-  const response = NextResponse.redirect(buildAuthorizeUrl(state));
+  const response = NextResponse.redirect(await buildAuthorizeUrl(state));
   response.cookies.set(OAUTH_STATE_COOKIE, state, {
     httpOnly: true,
     sameSite: "lax",

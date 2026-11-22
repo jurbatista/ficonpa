@@ -95,8 +95,9 @@ export function ContaAzulPanel({ data }: { data: ContaAzulView }) {
       >
         {!data.configured && (
           <div className="mb-4 rounded-lg border border-warning-500/30 bg-badge-warning-background px-4 py-3 text-sm text-badge-warning-text">
-            Defina <code>CONTA_AZUL_CLIENT_ID</code>, <code>CONTA_AZUL_CLIENT_SECRET</code> e{" "}
-            <code>CONTA_AZUL_REDIRECT_URI</code> no ambiente para habilitar a conexão.
+            Defina o <code>Client ID</code>, o <code>Client Secret</code> e a URL de
+            redirecionamento em <strong>Configurações → Conta Azul</strong> para habilitar a
+            conexão.
           </div>
         )}
 

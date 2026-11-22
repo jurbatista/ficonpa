@@ -1,7 +1,8 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
-import { optionalEnv, env } from "@/lib/env";
+import { env } from "@/lib/env";
 import { safeEqual, verifyPassword } from "@/lib/crypto";
+import { getPasswordHash } from "@/lib/config";
 import { SESSION_COOKIE, SESSION_DAYS } from "@/lib/session";
 
 export { SESSION_COOKIE };
@@ -27,8 +28,8 @@ export async function verifySessionToken(token: string): Promise<boolean> {
   }
 }
 
-export function checkPassword(password: string): boolean {
-  const hash = optionalEnv("APP_PASSWORD_HASH");
+export async function checkPassword(password: string): Promise<boolean> {
+  const hash = await getPasswordHash();
   if (hash) return verifyPassword(password, hash);
   return safeEqual(password, env("APP_PASSWORD", "ficonpa"));
 }

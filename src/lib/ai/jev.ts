@@ -1,4 +1,4 @@
-import { optionalEnv } from "@/lib/env";
+import { getOpenRouterApiKey } from "@/lib/config";
 import { JEV_CRITERIA } from "./prompts";
 
 export type JevCandidate = {
@@ -90,7 +90,7 @@ function buildQuestions(candidates: JevCandidate[]) {
 }
 
 export async function decideWithJev(input: JevInput): Promise<JevDecision> {
-  const apiKey = optionalEnv("OPENROUTER_API_KEY");
+  const apiKey = await getOpenRouterApiKey();
   if (!apiKey) {
     return {
       id: null,
@@ -98,7 +98,7 @@ export async function decideWithJev(input: JevInput): Promise<JevDecision> {
       answers: {},
       cost: 0,
       failed: true,
-      error: "OPENROUTER_API_KEY não configurada.",
+      error: "Chave da OpenRouter não configurada em Configurações.",
     };
   }
 

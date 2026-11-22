@@ -16,7 +16,7 @@ export default async function ContaAzulPage({
   const catalogs = connection ? await countCatalogs() : null;
 
   const data: ContaAzulView = {
-    configured: isContaAzulConfigured(),
+    configured: await isContaAzulConfigured(),
     connected: Boolean(connection),
     companyName: connection?.companyName ?? null,
     expiresAt: connection?.expiresAt ? connection.expiresAt.toISOString() : null,

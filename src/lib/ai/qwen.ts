@@ -1,4 +1,4 @@
-import { optionalEnv } from "@/lib/env";
+import { getOpenRouterApiKey } from "@/lib/config";
 import {
   QWEN_PDF_PROMPT,
   QWEN_SYSTEM_PROMPT,
@@ -34,8 +34,10 @@ export type QwenInput = {
 };
 
 export async function extractWithQwen(input: QwenInput): Promise<QwenExtraction> {
-  const apiKey = optionalEnv("OPENROUTER_API_KEY");
-  if (!apiKey) throw new Error("OPENROUTER_API_KEY não configurada.");
+  const apiKey = await getOpenRouterApiKey();
+  if (!apiKey) {
+    throw new Error("Chave da OpenRouter não configurada. Defina em Configurações.");
+  }
 
   const content: ContentPart[] = [];
   if (input.hasTextLayer && input.text) {
