@@ -45,15 +45,18 @@ const BILLING_HOSTS = [
   "caixa.gov.br",
 ];
 
-const KEYWORDS =
-  /boleto|fatura|cobran[cç]a|2[ªa]\s*via|segunda via|pagar|pagamento|visualizar|imprimir|baixar|download|invoice|bill|emiss[aã]o|t[ií]tulo|duplicata/i;
+/** Palavras que, sozinhas, já indicam cobrança. */
+const BILLING_WORDS =
+  /boleto|fatura|cobran[cç]a|2[ªa]\s*via|segunda via|t[ií]tulo|duplicata|invoice|mensalidade/i;
 
-const URL_KEYWORDS = /boleto|fatura|cobranca|invoice|bill|segundavia|2via|pagamento|payment|emissao|\/i\/|\/b\/|\/pay\b|checkout/i;
+/** Verbos comuns em qualquer e-mail ("visualizar no navegador", "baixar o app"): só contam com outro sinal. */
+const ACTION_WORDS = /pagar|pagamento|visualizar|imprimir|baixar|download|acessar|abrir|emitir/i;
+
+const URL_BILLING = /boleto|fatura|cobranca|invoice|segunda-?via|2-?via|bankslip/i;
+const URL_PAYMENT = /pagamento|payment|pagar|checkout|emissao|\/i\/|\/b\/|\/pay\b/i;
 
 const BLOCKED =
   /unsubscribe|descadastr|cancelar[-_ ]?inscri|optout|opt-out|privacy|privacidade|politica|termos|facebook\.com|instagram\.com|linkedin\.com|twitter\.com|x\.com\/|youtube\.com|whatsapp|wa\.me|t\.me\/|play\.google|apps\.apple|google\.com\/maps|\.(png|jpe?g|gif|svg|webp|ico|css|js)(\?|$)/i;
-
-const SUBJECT_HINT = /boleto|fatura|cobran[cç]a|vencimento|pagamento|2[ªa] via|t[ií]tulo/i;
 
 function decodeEntities(value: string): string {
   return value
@@ -110,7 +113,9 @@ export function extractLinkCandidates(input: {
     }
   }
 
-  const subjectBoost = input.subject && SUBJECT_HINT.test(input.subject) ? 1 : 0;
+  // Um link só é candidato com pelo menos um sinal forte de cobrança: o site é de
+  // cobrança, o texto do link fala em boleto/fatura, ou o assunto fala e o link é de ação.
+  const billingSubject = Boolean(input.subject && BILLING_WORDS.test(input.subject));
   const knownHosts = input.knownHosts ?? [];
   const candidates: LinkCandidate[] = [];
 
@@ -125,14 +130,27 @@ export function extractLinkCandidates(input: {
     if (BLOCKED.test(raw) || (anchor && BLOCKED.test(anchor))) continue;
 
     const host = url.hostname.toLowerCase();
-    let score = subjectBoost;
-    if (hostMatches(host, knownHosts)) score += 5;
-    if (hostMatches(host, BILLING_HOSTS)) score += 3;
-    if (anchor && KEYWORDS.test(anchor)) score += 3;
-    if (URL_KEYWORDS.test(url.pathname + url.search)) score += 2;
+    const target = url.pathname + url.search;
+    const known = hostMatches(host, knownHosts);
+    const billingHost = hostMatches(host, BILLING_HOSTS);
+    const billingAnchor = Boolean(anchor && BILLING_WORDS.test(anchor));
+    const actionAnchor = Boolean(anchor && ACTION_WORDS.test(anchor));
+    const billingUrl = URL_BILLING.test(target);
 
-    if (score >= 3) candidates.push({ url: url.toString(), anchorText: anchor, score });
+    const strong =
+      known || billingHost || billingAnchor || billingUrl || (billingSubject && actionAnchor);
+    if (!strong) continue;
+
+    const score =
+      (known ? 5 : 0) +
+      (billingHost ? 3 : 0) +
+      (billingAnchor ? 3 : 0) +
+      (billingUrl ? 2 : 0) +
+      (actionAnchor ? 1 : 0) +
+      (URL_PAYMENT.test(target) ? 1 : 0) +
+      (billingSubject ? 1 : 0);
+    candidates.push({ url: url.toString(), anchorText: anchor, score });
   }
 
-  return candidates.sort((a, b) => b.score - a.score).slice(0, input.max ?? 3);
+  return candidates.sort((a, b) => b.score - a.score).slice(0, input.max ?? 2);
 }

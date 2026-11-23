@@ -32,7 +32,7 @@ export async function createImapClient(account: ImapAccountInput): Promise<ImapF
     emitLogs: false,
     connectionTimeout: 20_000,
     greetingTimeout: 15_000,
-    socketTimeout: 60_000,
+    socketTimeout: 120_000,
   });
 }
 
@@ -86,6 +86,9 @@ export function describeImapError(
         : "O servidor recusou o usuário ou a senha.",
       "auth",
     );
+  }
+  if (/NoConnection|Connection not available|ECONNRESET|EPIPE|socket hang up|Unexpected close/i.test(raw)) {
+    return result("A conexão com o servidor de e-mail caiu. A próxima busca tenta de novo.", "other");
   }
   if (/ENOTFOUND|EAI_AGAIN/i.test(raw)) return result(`Servidor ${host} não encontrado.`, "host");
   if (/ECONNREFUSED/i.test(raw)) return result(`O servidor ${host} recusou a conexão nesta porta.`, "host");
