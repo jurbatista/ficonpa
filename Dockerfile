@@ -17,7 +17,7 @@ RUN npm run build
 
 FROM node:22-alpine AS runner
 # Chromium do sistema para o agente que busca boletos em links (Playwright usa via CHROMIUM_PATH).
-RUN apk add --no-cache libc6-compat chromium nss freetype harfbuzz ca-certificates ttf-freefont font-noto
+RUN apk add --no-cache libc6-compat su-exec chromium nss freetype harfbuzz ca-certificates ttf-freefont font-noto
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
@@ -36,8 +36,12 @@ COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
 COPY --from=builder /app/drizzle ./drizzle
 COPY --from=builder /app/src ./src
 
-RUN mkdir -p /app/data/attachments && chown -R nextjs:nodejs /app/data
-USER nextjs
+COPY --from=builder /app/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
+    && mkdir -p /app/data/attachments && chown -R nextjs:nodejs /app/data
 
+# O entrypoint corrige o dono do volume montado em /app/data (que pode chegar como root)
+# e então executa o comando como o usuário sem privilégios "nextjs".
 EXPOSE 3000
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["npm", "start"]

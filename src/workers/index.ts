@@ -1,7 +1,9 @@
 import "dotenv/config";
 import { Worker } from "bullmq";
 import { and, eq, isNull, lt, or } from "drizzle-orm";
-import { unlink } from "node:fs/promises";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { attachmentDir } from "@/lib/env";
 import { getDb } from "@/lib/db";
 import {
   attachments,
@@ -180,6 +182,20 @@ async function main() {
     {},
     { repeat: { pattern: "0 * * * *" }, jobId: "purge-cron" },
   );
+
+  // Sinal de vida no volume compartilhado: o /api/health do web confere que o worker
+  // está rodando e enxergando a mesma pasta de anexos.
+  const heartbeat = async () => {
+    try {
+      const dir = path.dirname(attachmentDir());
+      await mkdir(dir, { recursive: true });
+      await writeFile(path.join(dir, ".worker-heartbeat"), new Date().toISOString());
+    } catch (error) {
+      log("falha ao gravar heartbeat", { error: error instanceof Error ? error.message : String(error) });
+    }
+  };
+  await heartbeat();
+  setInterval(heartbeat, 60_000).unref();
 
   log("workers prontos");
 }
