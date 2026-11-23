@@ -6,7 +6,7 @@ import { sha256 } from "@/lib/crypto";
 import { enqueue, LINK_JOB_OPTIONS, QUEUE_NAMES } from "@/lib/queue";
 import { getSettings } from "@/lib/settings";
 import { extractLinkCandidates } from "@/lib/links/extract";
-import { createImapClient, hasPdfPart } from "./imap";
+import { createImapClient, describeImapError, hasPdfPart } from "./imap";
 import { storePdfAttachment } from "./store";
 import type { EmailAccount } from "@/db/schema";
 
@@ -32,6 +32,7 @@ export async function syncEmailAccount(account: EmailAccount): Promise<SyncAccou
   };
   const db = getDb();
   const client = createImapClient(account);
+  client.on("error", () => undefined);
   const { linkResolverEnabled: scanLinks } = await getSettings();
   const knownHosts = scanLinks
     ? (await db.selectDistinct({ host: linkRecipes.host }).from(linkRecipes)).map((row) => row.host)
@@ -191,7 +192,8 @@ export async function syncEmailAccount(account: EmailAccount): Promise<SyncAccou
 
     return result;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = describeImapError(error, account.host);
+    console.warn(`[imap] sync ${account.email}: ${message}`);
     result.error = message;
     await db
       .update(emailAccounts)
