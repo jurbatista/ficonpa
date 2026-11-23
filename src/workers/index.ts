@@ -106,7 +106,8 @@ async function runPurge() {
 async function main() {
   log("iniciando workers", {
     queues: Object.values(QUEUE_NAMES),
-    redis: process.env.REDIS_URL ?? "redis://localhost:6379",
+    // Nunca registrar credenciais: mascara usuário/senha da URL.
+    redis: (process.env.REDIS_URL ?? "redis://localhost:6379").replace(/\/\/[^@/]*@/, "//***@"),
   });
 
   const mailWorker = new Worker(
