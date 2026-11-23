@@ -1,7 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { emailLinks, emailMessages, linkRecipes } from "@/db/schema";
-import { describeSteps, type RecipeStep } from "./steps";
 
 /** Registros antigos podem trazer termos internos; a tela só mostra linguagem neutra. */
 const NEUTRAL: [RegExp, string][] = [
@@ -19,26 +18,48 @@ function neutral(text: string): string {
   return NEUTRAL.reduce((value, [pattern, replacement]) => value.replace(pattern, replacement), text);
 }
 
+/** Links que o sistema não conseguiu baixar e esperam uma pessoa. */
+const STUCK = ["CAPTCHA", "NEEDS_HUMAN", "FAILED"];
+
+function plainLinkReason(status: string, error: string | null): string | null {
+  switch (status) {
+    case "PENDING":
+    case "RESOLVING":
+      return "Abrindo o link…";
+    case "CAPTCHA":
+      return "O site pede uma confirmação que só uma pessoa consegue fazer.";
+    case "NEEDS_HUMAN":
+      return error && /pede dados|login/i.test(error)
+        ? "O site pede login ou dados para mostrar o boleto."
+        : "O boleto não foi encontrado na página.";
+    case "FAILED":
+      return "O boleto não foi encontrado neste link.";
+    case "UNAVAILABLE":
+      return "O site estava fora do ar.";
+    case "NOT_FOUND":
+      return "O link expirou ou a cobrança já foi paga.";
+    case "BLOCKED":
+      return "Este endereço não pode ser aberto pelo sistema.";
+    default:
+      return null;
+  }
+}
+
 export async function listLinkRecipes() {
   const rows = await getDb().select().from(linkRecipes).orderBy(desc(linkRecipes.updatedAt));
+  const perHost = new Map<string, number>();
+  for (const row of rows) perHost.set(row.host, (perHost.get(row.host) ?? 0) + 1);
   return rows.map((row) => ({
     id: row.id,
-    host: row.host,
-    pathPattern: row.pathPattern,
-    summary: describeSteps(row.steps as RecipeStep[]),
-    fast: (row.steps as RecipeStep[]).length === 1 && (row.steps as RecipeStep[])[0].op === "fetchPdf",
-    active: row.active,
-    version: row.version,
+    host: row.host.replace(/^www\./, ""),
+    // O formato do link só interessa quando o mesmo site tem mais de um caminho.
+    pathPattern: (perHost.get(row.host) ?? 0) > 1 ? row.pathPattern : "",
     successCount: row.successCount,
-    failureCount: row.failureCount,
     lastSuccessAt: row.lastSuccessAt?.toISOString() ?? null,
-    lastFailureAt: row.lastFailureAt?.toISOString() ?? null,
-    lastError: row.lastError ? neutral(row.lastError) : null,
-    updatedAt: row.updatedAt.toISOString(),
   }));
 }
 
-export async function listEmailLinks(limit = 100) {
+export async function listEmailLinks(limit = 60) {
   const rows = await getDb()
     .select({
       link: emailLinks,
@@ -52,18 +73,20 @@ export async function listEmailLinks(limit = 100) {
   return rows.map(({ link, subject, from }) => ({
     id: link.id,
     url: link.url,
-    host: link.host,
+    host: (link.host ?? "").replace(/^www\./, ""),
     status: link.status,
-    method: link.method,
-    attempts: link.attempts,
-    error: link.error ? neutral(link.error) : null,
+    /** Falhou e veio de um e-mail: alguém precisa abrir o link. */
+    stuck: STUCK.includes(link.status) && Boolean(link.messageId),
+    reason: plainLinkReason(link.status, link.error),
     attachmentId: link.attachmentId,
     manual: !link.messageId,
     subject,
     from,
-    trace: ((link.trace as string[] | null) ?? []).map(neutral),
+    details: [
+      ...((link.trace as string[] | null) ?? []),
+      ...(link.error ? [link.error] : []),
+    ].map(neutral),
     createdAt: link.createdAt.toISOString(),
-    updatedAt: link.updatedAt.toISOString(),
   }));
 }
 

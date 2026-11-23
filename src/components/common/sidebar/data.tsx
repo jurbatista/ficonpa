@@ -1,75 +1,18 @@
 import { GearIcon } from "@/components/common/header/icons";
 import type { ReactNode } from "react";
-import {
-  HomeIcon,
-  InvoiceIcon,
-  LetterIcon,
-  LinkIcon,
-  UserGroupIcon,
-} from "./icon";
+import { InvoiceIcon, LetterIcon, LinkIcon } from "./icon";
 
-type NavEntry = {
+export type NavEntry = {
   title: string;
-  url?: string;
+  url: string;
   icon: ReactNode;
-  items: Array<{ title: string; url?: string }>;
+  /** Outros caminhos que também acendem este item. */
+  also?: string[];
 };
 
-type NavSection = {
-  label: string;
-  items: NavEntry[];
-};
-
-export const NAV_DATA: NavSection[] = [
-  {
-    label: "OPERAÇÃO",
-    items: [
-      {
-        title: "Painel",
-        url: "/",
-        icon: <HomeIcon />,
-        items: [],
-      },
-      {
-        title: "Contas a pagar",
-        url: "/contas-a-pagar",
-        icon: <InvoiceIcon />,
-        items: [],
-      },
-    ],
-  },
-  {
-    label: "CONEXÕES",
-    items: [
-      {
-        title: "E-mails",
-        url: "/conexoes/emails",
-        icon: <LetterIcon />,
-        items: [],
-      },
-      {
-        title: "Links de boleto",
-        url: "/conexoes/links",
-        icon: <LinkIcon />,
-        items: [],
-      },
-      {
-        title: "Conta Azul",
-        url: "/conexoes/conta-azul",
-        icon: <UserGroupIcon />,
-        items: [],
-      },
-    ],
-  },
-  {
-    label: "SISTEMA",
-    items: [
-      {
-        title: "Configurações",
-        url: "/configuracoes",
-        icon: <GearIcon />,
-        items: [],
-      },
-    ],
-  },
+export const NAV: NavEntry[] = [
+  { title: "Boletos", url: "/", also: ["/contas-a-pagar", "/conexoes/links"], icon: <InvoiceIcon /> },
+  { title: "E-mails", url: "/conexoes/emails", icon: <LetterIcon /> },
+  { title: "Conta Azul", url: "/conexoes/conta-azul", icon: <LinkIcon /> },
+  { title: "Configurações", url: "/configuracoes", icon: <GearIcon /> },
 ];

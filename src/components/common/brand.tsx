@@ -4,7 +4,7 @@ export function BrandMark({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary-500 text-white shadow-sm",
+        "inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-button-primary-background text-white shadow-sm",
         className,
       )}
       aria-hidden
@@ -27,12 +27,7 @@ export function BrandWithText({ className }: { className?: string }) {
   return (
     <span className={cn("flex items-center gap-2.5", className)}>
       <BrandMark />
-      <span className="flex flex-col leading-none">
-        <span className="text-lg font-semibold tracking-tight text-text-primary">ficonpa</span>
-        <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-text-tertiary">
-          contas a pagar
-        </span>
-      </span>
+      <span className="text-lg font-semibold tracking-tight text-text-primary">ficonpa</span>
     </span>
   );
 }

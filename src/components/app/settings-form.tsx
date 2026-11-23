@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -8,15 +9,15 @@ import { Toggle } from "@/components/tailgrids/core/toggle";
 import type { PublicSettings } from "@/lib/settings";
 
 const RIGOR_OPTIONS = [
-  { value: 0.98, label: "Rigoroso — só lança quando não há nenhuma dúvida" },
-  { value: 0.95, label: "Padrão (recomendado)" },
-  { value: 0.9, label: "Flexível — lança mais boletos sem revisão" },
+  { value: 0.98, label: "Alto" },
+  { value: 0.95, label: "Normal" },
+  { value: 0.9, label: "Baixo" },
 ];
 
 const RETENTION_OPTIONS = [
   { value: 30, label: "30 dias" },
   { value: 60, label: "60 dias" },
-  { value: 90, label: "90 dias (recomendado)" },
+  { value: 90, label: "90 dias" },
   { value: 180, label: "6 meses" },
   { value: 365, label: "1 ano" },
   { value: 730, label: "2 anos" },
@@ -61,7 +62,7 @@ function Switch({
   return (
     <div className="flex items-center gap-3">
       <span
-        className={`w-20 text-right text-sm font-medium ${checked ? "text-success-500" : "text-text-tertiary"}`}
+        className={`w-20 text-right text-sm font-medium ${checked ? "text-badge-success-text" : "text-text-tertiary"}`}
       >
         {checked ? "Ligado" : "Desligado"}
       </span>
@@ -76,10 +77,7 @@ function Switch({
   );
 }
 
-/**
- * Ajustes do dia a dia. Cada mudança é gravada na hora — não existe botão
- * "Salvar" para esquecer.
- */
+/** Ajustes do dia a dia. Cada mudança é gravada na hora, sem botão "Salvar". */
 export function SettingsForm({ initial }: { initial: PublicSettings }) {
   const router = useRouter();
   const [settings, setSettings] = useState(initial);
@@ -113,37 +111,12 @@ export function SettingsForm({ initial }: { initial: PublicSettings }) {
     if (
       days < settings.retentionDays &&
       !window.confirm(
-        `Boletos e registros com mais de ${days} dias serão apagados em até 1 hora e não podem ser recuperados. Continuar?`,
+        `Boletos com mais de ${days} dias serão apagados em até 1 hora, sem volta. Continuar?`,
       )
     ) {
       return;
     }
-    void apply({ retentionDays: days }, "Prazo de guarda atualizado.");
-  };
-
-  const purge = async () => {
-    if (
-      !window.confirm(
-        `Apagar agora os boletos e registros com mais de ${settings.retentionDays} dias? Isso não pode ser desfeito.`,
-      )
-    ) {
-      return;
-    }
-    setBusy(true);
-    try {
-      const response = await fetch("/api/maintenance/purge", { method: "POST" });
-      const payload = (await response.json()) as { ok: boolean; error?: string };
-      if (!response.ok || !payload.ok) {
-        throw new Error(payload.error ?? "Não foi possível iniciar a limpeza.");
-      }
-      toast.success("Limpeza iniciada. Os dados antigos somem em instantes.");
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Não foi possível iniciar a limpeza.",
-      );
-    } finally {
-      setBusy(false);
-    }
+    void apply({ retentionDays: days }, "Prazo atualizado.");
   };
 
   const rigorIsPreset = RIGOR_OPTIONS.some(
@@ -154,128 +127,99 @@ export function SettingsForm({ initial }: { initial: PublicSettings }) {
   );
 
   return (
-    <>
-      <Section title="Automação" description="As mudanças são salvas na hora.">
-        <div className="divide-y divide-card-border">
-          <Row
-            title="Lançamento automático"
-            description={
-              settings.autoPostEnabled
-                ? "Boletos conferidos vão direto para o Conta Azul. Os que geram dúvida esperam a sua revisão."
-                : "Nenhum boleto é lançado sem a sua aprovação."
+    <Section>
+      <div className="divide-y divide-card-border">
+        <Row
+          title="Lançamento automático"
+          description={
+            settings.autoPostEnabled
+              ? "Boletos sem dúvida vão direto para o Conta Azul."
+              : "Você confere cada boleto antes de lançar."
+          }
+        >
+          <Switch
+            checked={settings.autoPostEnabled}
+            disabled={busy}
+            label="Lançamento automático"
+            onChange={(next) =>
+              apply(
+                { autoPostEnabled: next },
+                next ? "Lançamento automático ligado." : "Lançamento automático desligado.",
+              )
             }
-          >
-            <Switch
-              checked={settings.autoPostEnabled}
-              disabled={busy}
-              label="Lançamento automático"
-              onChange={(next) =>
-                apply(
-                  { autoPostEnabled: next },
-                  next ? "Lançamento automático ligado." : "Lançamento automático desligado.",
-                )
-              }
-            />
-          </Row>
+          />
+        </Row>
 
-          {settings.autoPostEnabled && (
-            <Row
-              title="Rigor da conferência"
-              description="Quanto mais rigoroso, mais boletos passam pela sua revisão antes de serem lançados."
-            >
-              <select
-                className={`${fieldClass} sm:w-80`}
-                value={String(settings.autoPostThreshold)}
-                disabled={busy}
-                aria-label="Rigor da conferência"
-                onChange={(event) =>
-                  apply(
-                    { autoPostThreshold: Number(event.target.value) },
-                    "Rigor da conferência atualizado.",
-                  )
-                }
-              >
-                {!rigorIsPreset && (
-                  <option value={String(settings.autoPostThreshold)}>
-                    Personalizado ({percent(settings.autoPostThreshold)})
-                  </option>
-                )}
-                {RIGOR_OPTIONS.map((option) => (
-                  <option key={option.value} value={String(option.value)}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </Row>
-          )}
-
-          <Row
-            title="Boletos por link"
-            description={
-              settings.linkResolverEnabled
-                ? "Quando o e-mail traz um link em vez do PDF, o sistema abre o link e baixa o boleto."
-                : "E-mails que trazem só um link, sem o PDF anexado, são ignorados."
-            }
-          >
-            <Switch
-              checked={settings.linkResolverEnabled}
-              disabled={busy}
-              label="Boletos por link"
-              onChange={(next) =>
-                apply(
-                  { linkResolverEnabled: next },
-                  next ? "Boletos por link ligado." : "Boletos por link desligado.",
-                )
-              }
-            />
-          </Row>
-        </div>
-      </Section>
-
-      <Section
-        title="Guarda de dados"
-        description="Por quanto tempo boletos e registros ficam no sistema."
-      >
-        <div className="divide-y divide-card-border">
-          <Row
-            title="Apagar dados após"
-            description="Conta a partir da chegada do boleto ou do lançamento, o que acontecer por último. O que já foi lançado continua no Conta Azul."
-          >
+        {settings.autoPostEnabled && (
+          <Row title="Rigor" description="Com rigor alto, mais boletos esperam a sua conferência.">
             <select
-              className={`${fieldClass} sm:w-56`}
-              value={String(settings.retentionDays)}
+              className={`${fieldClass} sm:w-44`}
+              value={String(settings.autoPostThreshold)}
               disabled={busy}
-              aria-label="Apagar dados após"
-              onChange={(event) => changeRetention(Number(event.target.value))}
+              aria-label="Rigor"
+              onChange={(event) =>
+                apply({ autoPostThreshold: Number(event.target.value) }, "Rigor atualizado.")
+              }
             >
-              {!retentionIsPreset && (
-                <option value={String(settings.retentionDays)}>
-                  {settings.retentionDays} dias
+              {!rigorIsPreset && (
+                <option value={String(settings.autoPostThreshold)}>
+                  Personalizado ({percent(settings.autoPostThreshold)})
                 </option>
               )}
-              {RETENTION_OPTIONS.map((option) => (
+              {RIGOR_OPTIONS.map((option) => (
                 <option key={option.value} value={String(option.value)}>
                   {option.label}
                 </option>
               ))}
             </select>
           </Row>
+        )}
 
-          <Row
-            title="Limpar agora"
-            description="A limpeza já acontece sozinha, de hora em hora. Use só se precisar liberar espaço imediatamente."
+        <Row
+          title="Boletos por link"
+          description={
+            <>
+              {settings.linkResolverEnabled
+                ? "Quando o e-mail traz um link em vez do PDF, o boleto é baixado do link."
+                : "E-mails que só trazem um link são ignorados."}{" "}
+              <Link href="/conexoes/links" className="whitespace-nowrap underline underline-offset-2 hover:text-text-primary">
+                Ver links
+              </Link>
+            </>
+          }
+        >
+          <Switch
+            checked={settings.linkResolverEnabled}
+            disabled={busy}
+            label="Boletos por link"
+            onChange={(next) =>
+              apply(
+                { linkResolverEnabled: next },
+                next ? "Boletos por link ligado." : "Boletos por link desligado.",
+              )
+            }
+          />
+        </Row>
+
+        <Row title="Apagar boletos após" description="O que já foi lançado continua no Conta Azul.">
+          <select
+            className={`${fieldClass} sm:w-44`}
+            value={String(settings.retentionDays)}
+            disabled={busy}
+            aria-label="Apagar boletos após"
+            onChange={(event) => changeRetention(Number(event.target.value))}
           >
-            <button
-              type="button"
-              onClick={purge}
-              disabled={busy}
-              className="rounded-lg border border-button-error-outline-stroke px-4 py-2.5 text-sm font-medium text-button-error-outline-text transition hover:bg-button-error-outline-hover-background disabled:opacity-60"
-            >
-              Apagar dados antigos
-            </button>
-          </Row>
-        </div>
-      </Section>
-    </>
+            {!retentionIsPreset && (
+              <option value={String(settings.retentionDays)}>{settings.retentionDays} dias</option>
+            )}
+            {RETENTION_OPTIONS.map((option) => (
+              <option key={option.value} value={String(option.value)}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </Row>
+      </div>
+    </Section>
   );
 }

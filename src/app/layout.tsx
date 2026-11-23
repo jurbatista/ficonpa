@@ -13,11 +13,10 @@ const geistInter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    template: "%s | ficonpa",
-    default: "ficonpa — contas a pagar automáticas",
+    template: "%s · ficonpa",
+    default: "ficonpa",
   },
-  description:
-    "Leitura de boletos por e-mail, triagem automática e lançamento de contas a pagar no Conta Azul.",
+  description: "Boletos do e-mail direto para o Conta Azul.",
 };
 
 export default function RootLayout({

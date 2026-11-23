@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, ilike, inArray, or } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import {
   attachments,
@@ -7,7 +7,6 @@ import {
   emailMessages,
   payables,
 } from "@/db/schema";
-import { getSettings } from "@/lib/settings";
 
 export type PayableListItem = {
   id: string;
@@ -154,67 +153,6 @@ export async function getPayableDetail(id: string) {
   return row ?? null;
 }
 
-export async function getDashboardStats() {
-  const db = getDb();
-  const settings = await getSettings();
-  const since = new Date(Date.now() - settings.retentionDays * 86_400_000);
-
-  const [total] = await db.select({ value: count() }).from(payables);
-  const [posted] = await db
-    .select({ value: count() })
-    .from(payables)
-    .where(eq(payables.status, "POSTED"));
-  const [pending] = await db
-    .select({ value: count() })
-    .from(payables)
-    .where(inArray(payables.status, ["DRAFT", "APPROVED", "FAILED"]));
-  const [attention] = await db
-    .select({ value: count() })
-    .from(documents)
-    .where(
-      inArray(documents.status, ["NO_SUPPLIER", "NEEDS_ATTENTION", "ERROR", "PENDING"]),
-    );
-  const [recent] = await db
-    .select({ value: count() })
-    .from(payables)
-    .where(gte(payables.createdAt, since));
-  const [accounts] = await db.select({ value: count() }).from(emailAccounts);
-
-  return {
-    total: Number(total?.value ?? 0),
-    posted: Number(posted?.value ?? 0),
-    pending: Number(pending?.value ?? 0),
-    attention: Number(attention?.value ?? 0),
-    recent: Number(recent?.value ?? 0),
-    emailAccounts: Number(accounts?.value ?? 0),
-    retentionDays: settings.retentionDays,
-    autoPostEnabled: settings.autoPostEnabled,
-  };
-}
-
 export async function listEmailAccounts() {
   return getDb().select().from(emailAccounts).orderBy(desc(emailAccounts.createdAt));
-}
-
-export async function getRecentActivity(limit = 8) {
-  const db = getDb();
-  return db
-    .select({
-      id: documents.id,
-      status: documents.status,
-      createdAt: documents.createdAt,
-      attentionReason: documents.attentionReason,
-      attachmentId: attachments.id,
-      filename: attachments.filename,
-      emailSubject: emailMessages.subject,
-      supplierName: payables.supplierName,
-      value: payables.value,
-      dueDate: payables.dueDate,
-    })
-    .from(documents)
-    .innerJoin(attachments, eq(attachments.id, documents.attachmentId))
-    .innerJoin(emailMessages, eq(emailMessages.id, attachments.messageId))
-    .leftJoin(payables, eq(payables.documentId, documents.id))
-    .orderBy(desc(documents.createdAt))
-    .limit(limit);
 }

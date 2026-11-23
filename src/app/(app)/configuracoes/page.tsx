@@ -23,11 +23,8 @@ export default async function SettingsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Configurações"
-        description="Como o sistema trabalha, por quanto tempo guarda os dados e a senha de acesso."
-      />
-      <div className="max-w-4xl space-y-5 px-5 pb-8 lg:px-7">
+      <PageHeader title="Configurações" />
+      <div className="max-w-3xl space-y-5 px-5 pb-8 lg:px-7">
         <SettingsForm initial={settings} />
 
         <PasswordForm />

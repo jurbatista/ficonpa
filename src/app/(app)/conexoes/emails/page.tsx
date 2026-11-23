@@ -37,7 +37,7 @@ export default async function EmailAccountsPage({
 
   return (
     <>
-      <PageHeader title="E-mails" description="As caixas onde os boletos chegam." />
+      <PageHeader title="E-mails" />
       <div className="px-5 pb-8 lg:px-7">
         <EmailAccountsManager accounts={accounts} notice={notice} />
       </div>

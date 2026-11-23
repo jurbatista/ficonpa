@@ -1,146 +1,117 @@
 "use client";
 
-import { buttonStyles } from "@/components/tailgrids/core/button";
-import { CollapsibleGroup } from "@/components/tailgrids/core/collapsible";
 import { BrandMark, BrandWithText } from "@/components/common/brand";
+import ThemeToggle from "@/components/common/header/theme-toggle";
 import { cn } from "@/utils/cn";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
-import type { Key } from "react-aria-components";
-import { NAV_DATA } from "./data";
-import { CloseIcon, SidebarExpandedIcon, ThreeDots } from "./icon";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { NAV } from "./data";
+import { CloseIcon, SidebarExpandedIcon } from "./icon";
 import NavItem from "./nav-item";
-import { findActiveGroupKey } from "./utils";
+
+function LogoutIcon() {
+  return (
+    <svg width={18} height={18} viewBox="0 0 18 18" fill="none" aria-hidden>
+      <path
+        d="M6.75 15.75H5.25a3 3 0 0 1-3-3v-7.5a3 3 0 0 1 3-3h1.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M12 12.375 15.375 9 12 5.625M15 9H7.125"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 export default function Sidebar({
-    isSidebarOpen,
-    toggleSidebar,
-    isMobileSheet = false,
-    onItemClick,
+  isSidebarOpen,
+  toggleSidebar,
+  isMobileSheet = false,
+  onItemClick,
 }: {
-    isSidebarOpen: boolean;
-    toggleSidebar: () => void;
-    isMobileSheet?: boolean;
-    onItemClick?: () => void;
+  isSidebarOpen: boolean;
+  toggleSidebar: () => void;
+  isMobileSheet?: boolean;
+  onItemClick?: () => void;
 }) {
-    const pathname = usePathname();
+  const router = useRouter();
+  const [leaving, setLeaving] = useState(false);
 
-    const activeGroupKey = useMemo(
-        () => findActiveGroupKey(pathname),
-        [pathname],
-    );
+  const logout = async () => {
+    setLeaving(true);
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
+    router.replace("/login");
+    router.refresh();
+  };
 
-    const [expandedKeys, setExpandedKeys] = useState<Set<Key>>(
-        () => new Set<Key>(activeGroupKey ? [activeGroupKey] : []),
-    );
+  return (
+    <div className="flex h-full flex-col overflow-hidden">
+      <div
+        className={cn(
+          "flex items-center px-4 pt-7 text-text-primary",
+          isSidebarOpen ? "justify-between" : "flex-col justify-center gap-4",
+        )}
+      >
+        <Link href="/" onClick={onItemClick} aria-label="ficonpa">
+          {isSidebarOpen ? <BrandWithText /> : <BrandMark />}
+        </Link>
 
-    return (
-        <div className='flex h-full flex-col overflow-hidden'>
-            {/* Header */}
-            <div
-                className={cn(
-                    'flex items-center px-4 pt-7 text-text-primary',
-                    isSidebarOpen
-                        ? 'justify-between'
-                        : 'flex-col justify-center gap-4',
-                )}
-            >
-                <Link href='/' onClick={onItemClick}>
-                    {isSidebarOpen ? <BrandWithText /> : <BrandMark />}
-                </Link>
+        <button
+          onClick={toggleSidebar}
+          className={cn(
+            "rounded-lg p-1.5 text-icon-tertiary transition-colors",
+            isMobileSheet
+              ? "hover:bg-background-gray-primary hover:text-text-primary"
+              : "hover:text-text-secondary",
+          )}
+          aria-label={isMobileSheet ? "Fechar menu" : isSidebarOpen ? "Recolher menu" : "Abrir menu"}
+        >
+          {isMobileSheet ? <CloseIcon /> : <SidebarExpandedIcon />}
+        </button>
+      </div>
 
-                <button
-                    onClick={() => toggleSidebar()}
-                    className={cn(
-                        'p-1.5 transition-colors',
-                        isMobileSheet
-                            ? 'rounded-lg text-icon-tertiary hover:bg-background-gray-primary hover:text-text-primary'
-                            : 'text-icon-tertiary hover:text-text-secondary',
-                    )}
-                    aria-label={
-                        isMobileSheet ? 'Fechar menu' : 'Alternar menu'
-                    }
-                >
-                    {isMobileSheet ? <CloseIcon /> : <SidebarExpandedIcon />}
-                </button>
-            </div>
+      <nav
+        aria-label="Principal"
+        className={cn(
+          "scrollbar-thin flex-1 overflow-y-auto",
+          isSidebarOpen ? "mt-8 space-y-1 px-4" : "mt-6 space-y-1.5 px-2",
+        )}
+      >
+        {NAV.map((item) => (
+          <NavItem key={item.url} item={item} collapsed={!isSidebarOpen} onItemClick={onItemClick} />
+        ))}
+      </nav>
 
-            {/* Navigation */}
-            <nav
-                className={cn(
-                    'scrollbar-thin flex-1 overflow-y-auto',
-                    isSidebarOpen ? 'mt-7 space-y-6 px-4' : 'mt-5 px-2',
-                )}
-            >
-                <CollapsibleGroup
-                    expandedKeys={expandedKeys}
-                    onExpandedChange={setExpandedKeys}
-                >
-                    {NAV_DATA.map((section) => (
-                        <div key={section.label}>
-                            {isSidebarOpen ? (
-                                <p className='mt-6 mb-4 text-xs text-text-tertiary uppercase'>
-                                    {section.label}
-                                </p>
-                            ) : (
-                                section.label && (
-                                    <span className='flex items-center justify-center pt-6 pb-4 text-icon-secondary'>
-                                        <ThreeDots />
-                                    </span>
-                                )
-                            )}
-
-                            <div
-                                className={cn(
-                                    'space-y-1',
-                                    !isSidebarOpen && 'space-y-1.5',
-                                )}
-                            >
-                                {section.items.map((item) => (
-                                    <NavItem
-                                        key={item.title}
-                                        id={item.title}
-                                        icon={item.icon}
-                                        label={item.title}
-                                        href={item.url}
-                                        items={item.items}
-                                        collapsed={!isSidebarOpen}
-                                        onItemClick={onItemClick}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-                    ))}
-                </CollapsibleGroup>
-            </nav>
-
-            {/* Footer — only visible when expanded */}
-            {isSidebarOpen && (
-                <div className='px-4 py-4'>
-                    <div className='rounded-2xl bg-background-gray-primary px-4 py-4'>
-                        <p className='text-sm leading-5 font-semibold text-text-primary'>
-                            Retenção configurável
-                        </p>
-                        <p className='mt-1 text-xs leading-5 text-text-tertiary'>
-                            Boletos e registros são apagados do banco e do disco após o
-                            período definido nas configurações.
-                        </p>
-                        <Link
-                            href='/configuracoes'
-                            onClick={onItemClick}
-                            className={buttonStyles({
-                                variant: 'primary',
-                                appearance: 'outline',
-                                size: 'sm',
-                                className: 'mt-3 w-full',
-                            })}
-                        >
-                            Ver configurações
-                        </Link>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
+      <div
+        className={cn(
+          "flex items-center gap-2 py-4",
+          isSidebarOpen ? "justify-between px-4" : "flex-col px-2",
+        )}
+      >
+        <button
+          onClick={logout}
+          disabled={leaving}
+          aria-label="Sair"
+          title={isSidebarOpen ? undefined : "Sair"}
+          className={cn(
+            "flex items-center gap-3 rounded-lg text-sm font-medium text-text-secondary transition-colors hover:bg-sidebar-navigation-nav-item-nav-hover-background hover:text-text-primary disabled:opacity-60",
+            isSidebarOpen ? "px-3 py-2" : "px-3 py-2.5",
+          )}
+        >
+          <span className="text-icon-tertiary">
+            <LogoutIcon />
+          </span>
+          {isSidebarOpen && <span>{leaving ? "Saindo…" : "Sair"}</span>}
+        </button>
+        <ThemeToggle />
+      </div>
+    </div>
+  );
 }

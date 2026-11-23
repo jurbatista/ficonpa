@@ -31,8 +31,8 @@ Muitos e-mails não trazem o PDF anexado, só um link (Asaas, Gerencianet/Efí, 
    **Captcha, link expirado e site fora do ar interrompem na hora**; fora do ar é re-tentado mais tarde.
 6. O PDF obtido entra no mesmo fluxo dos anexos (triagem, fornecedor, lançamento).
 
-Tela **Conexões → Links de boleto**: testar um link na hora, ver/desativar/esquecer caminhos aprendidos e
-acompanhar os passos de cada link. Pela linha de comando:
+Tela **Boletos por link** (aberta pelo aviso na página inicial ou por Configurações): links que não
+baixaram, teste de um link na hora e sites conhecidos. Pela linha de comando:
 
 ```bash
 npm run link:learn -- "https://www.asaas.com/i/abc123" --out boleto.pdf
@@ -54,12 +54,15 @@ Localmente é preciso `npx playwright install chromium`; no Docker a imagem já 
 
 ## Telas
 
-- **Painel** — visão geral, toggle global de lançamento automático e atividade recente.
-- **Contas a pagar** — abas “Todos”, “Na fila”, “Lançados”, “Rejeitados” e “Precisa de atenção”.
-- **Detalhe** — revisão dos campos, pré-visualização do PDF, análise do documento, aprovar/rejeitar/reprocessar.
-- **E-mails** — cadastro, teste de conexão, sincronização manual e exclusão de caixas IMAP.
-- **Conta Azul** — OAuth, status do token e sincronização de pessoas, categorias, contas e centros de custo.
-- **Configurações** — integrações (OpenRouter e Conta Azul), senha de acesso, limiares, retenção e limpeza manual.
+- **Boletos** (página inicial) — tudo o que chegou por e-mail, em três abas: “Para revisar”, “Lançados” e
+  “Descartados”. No primeiro acesso mostra só os dois passos para começar (Conta Azul e caixa de e-mail).
+- **Detalhe do boleto** — campos do lançamento ao lado do PDF; “Lançar no Conta Azul”, “Salvar”, “Descartar”.
+- **E-mails** — digite o e-mail; o provedor é detectado e a tela pede só a senha (ou o login da Microsoft).
+- **Conta Azul** — conectar/desconectar e atualizar os cadastros (isso também acontece sozinho, de hora em hora).
+- **Configurações** — lançamento automático, boletos por link, prazo de guarda, senha e, recolhida,
+  a configuração técnica (credenciais da Conta Azul e da Microsoft).
+- **Boletos por link** — aberta a partir do aviso na página inicial ou de Configurações: links que não
+  puderam ser baixados, teste de um link e sites conhecidos.
 
 ## Rodando localmente
 

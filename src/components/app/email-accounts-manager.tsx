@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { fieldClass, Section } from "@/components/app/ui";
-import { formatDateTime } from "@/lib/format";
+import { btnPrimary, btnSmall, btnText, fieldClass, Section } from "@/components/app/ui";
+import { formatWhen } from "@/lib/format";
 
 export type EmailAccountView = {
   id: string;
@@ -60,11 +60,6 @@ const PROVIDER_NAMES: Record<string, string> = {
   godaddy: "GoDaddy",
 };
 
-const primaryButton =
-  "rounded-lg bg-button-primary-background px-5 py-2.5 text-sm font-medium text-button-primary-text transition hover:bg-button-primary-hover-background disabled:opacity-60";
-const quietButton =
-  "rounded-lg border border-card-border px-3 py-1.5 text-xs font-medium text-text-secondary transition hover:text-text-primary disabled:opacity-60";
-
 const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value.trim());
 
 async function api(path: string, method: string, body?: unknown) {
@@ -76,9 +71,14 @@ async function api(path: string, method: string, body?: unknown) {
   const payload = (await response.json().catch(() => ({ ok: response.ok }))) as {
     ok: boolean;
     error?: string;
+    hostProblem?: boolean;
     data?: unknown;
   };
-  if (!response.ok || !payload.ok) throw new Error(payload.error ?? "Falha na operação.");
+  if (!response.ok || !payload.ok) {
+    throw Object.assign(new Error(payload.error ?? "Não deu certo. Tente de novo."), {
+      hostProblem: Boolean(payload.hostProblem),
+    });
+  }
   return payload.data;
 }
 
@@ -160,15 +160,15 @@ export function EmailAccountsManager({
         password,
         ...(custom ? { host, port: Number(port), username } : {}),
       });
-      toast.success("Caixa conectada. Já estamos buscando os boletos.");
+      toast.success("Caixa conectada. Buscando boletos…");
       setEmail("");
       setPassword("");
       setDiscovery(null);
       router.refresh();
     } catch (failure) {
-      const message = failure instanceof Error ? failure.message : "Falha ao conectar.";
+      const message = failure instanceof Error ? failure.message : "Não foi possível conectar.";
       setError(message);
-      if (/não encontrado|recusou a conexão|Tempo esgotado|SSL/i.test(message)) setAdvanced(true);
+      if ((failure as { hostProblem?: boolean }).hostProblem) setAdvanced(true);
     } finally {
       setBusy(null);
     }
@@ -181,7 +181,7 @@ export function EmailAccountsManager({
       toast.success(success);
       router.refresh();
     } catch (failure) {
-      toast.error(failure instanceof Error ? failure.message : "Falha na operação.", { duration: 10_000 });
+      toast.error(failure instanceof Error ? failure.message : "Não deu certo. Tente de novo.", { duration: 10_000 });
       router.refresh();
     } finally {
       setBusy(null);
@@ -189,12 +189,98 @@ export function EmailAccountsManager({
   };
 
   const provider = discovery?.provider;
+  const providerName = provider ? (PROVIDER_NAMES[provider.id] ?? provider.name) : "";
   const microsoft = provider?.auth === "microsoft" && !usePassword;
   const showPassword = Boolean(provider) && !microsoft;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
-      <Section title="Conectar caixa de e-mail" description="Digite o e-mail. O resto a gente descobre.">
+    <div className="max-w-2xl space-y-5">
+      {accounts.length > 0 && (
+        <Section title="Caixas conectadas">
+          <ul className="divide-y divide-card-border">
+            {accounts.map((account) => {
+              const state = !account.active ? "paused" : account.lastError ? "error" : "ok";
+              return (
+                <li key={account.id} className="py-4 first:pt-0 last:pb-0">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-2 text-sm font-medium text-text-primary">
+                        <span
+                          aria-hidden
+                          className={`size-2 shrink-0 rounded-full ${state === "ok" ? "bg-success-500" : state === "error" ? "bg-error-500" : "bg-text-tertiary"}`}
+                        />
+                        <span className="truncate">{account.email}</span>
+                      </p>
+                      <p className="mt-0.5 pl-4 text-xs text-text-tertiary">
+                        {state === "paused"
+                          ? "Pausada"
+                          : state === "error"
+                            ? "Não está conectando"
+                            : account.lastSyncAt
+                              ? `Última busca ${formatWhen(account.lastSyncAt)}`
+                              : "Primeira busca em andamento…"}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        className={btnSmall}
+                        disabled={busy === account.id}
+                        onClick={() => act(account.id, () => api(`/api/email-accounts/${account.id}/sync`, "POST"), "Buscando…")}
+                      >
+                        Buscar agora
+                      </button>
+                      <button
+                        className={btnSmall}
+                        disabled={busy === account.id}
+                        onClick={() =>
+                          act(
+                            account.id,
+                            () => api(`/api/email-accounts/${account.id}`, "PATCH", { active: !account.active }),
+                            account.active ? "Caixa pausada." : "Caixa reativada.",
+                          )
+                        }
+                      >
+                        {account.active ? "Pausar" : "Reativar"}
+                      </button>
+                      <button
+                        className={btnSmall}
+                        disabled={busy === account.id}
+                        onClick={() => {
+                          if (!window.confirm(`Remover ${account.email}? Os boletos que vieram dela também saem do sistema.`)) return;
+                          void act(account.id, () => api(`/api/email-accounts/${account.id}`, "DELETE"), "Caixa removida.");
+                        }}
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  </div>
+                  {state === "error" && (
+                    <div className="mt-3 ml-4 rounded-lg bg-badge-error-background px-3.5 py-2.5">
+                      <p className="text-xs text-badge-error-text">{account.lastError}</p>
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          className={btnSmall}
+                          disabled={busy === account.id}
+                          onClick={() => act(account.id, () => api(`/api/email-accounts/${account.id}/test`, "POST"), "Conectou.")}
+                        >
+                          Testar de novo
+                        </button>
+                        {account.authType === "microsoft" && (
+                          <a className={btnSmall} href={`/api/email-accounts/oauth/microsoft/start?email=${encodeURIComponent(account.email)}`}>
+                            Entrar de novo
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </Section>
+      )}
+
+      <Section title={accounts.length > 0 ? "Conectar outra caixa" : "Conectar caixa"}>
         <form onSubmit={connect} className="space-y-4">
           <div>
             <input
@@ -202,65 +288,69 @@ export function EmailAccountsManager({
               autoComplete="off"
               autoFocus={accounts.length === 0}
               className={`${fieldClass} text-base`}
-              placeholder="financeiro@suaempresa.com.br"
+              placeholder="E-mail da caixa"
               value={email}
               onChange={(event) => changeEmail(event.target.value)}
               aria-label="E-mail da caixa"
             />
-            <p className="mt-1.5 min-h-5 text-xs text-text-tertiary" aria-live="polite">
-              {searching && "Procurando o servidor deste e-mail…"}
+            <p className="mt-1.5 min-h-5 text-xs" aria-live="polite">
+              {searching && <span className="text-text-tertiary">Procurando o servidor…</span>}
               {!searching && provider && discovery?.via !== "unknown" && (
-                <span className="font-medium text-success-500">✓ {provider.name} detectado</span>
+                <span className="font-medium text-badge-success-text">✓ {providerName}</span>
               )}
               {!searching && discovery?.via === "unknown" && (
-                <span className="text-warning-500">
-                  Não achamos o servidor automaticamente. Confira o endereço abaixo com seu provedor.
-                </span>
+                <span className="text-badge-warning-text">Não achei o servidor deste e-mail. Informe abaixo.</span>
               )}
             </p>
           </div>
 
           {microsoft && discovery && (
-            <div className="space-y-3 rounded-lg border border-card-border p-4">
+            <div className="space-y-3">
               {discovery.microsoftConfigured ? (
-                <>
-                  <p className="text-sm text-text-secondary">
-                    A Microsoft não usa senha aqui: você entra na sua conta e autoriza a leitura dos e-mails.
-                  </p>
-                  <a href={`/api/email-accounts/oauth/microsoft/start?email=${encodeURIComponent(discovery.email)}`} className={`${primaryButton} inline-block`}>
-                    Entrar com a Microsoft
-                  </a>
-                </>
+                <a
+                  href={`/api/email-accounts/oauth/microsoft/start?email=${encodeURIComponent(discovery.email)}`}
+                  className={btnPrimary}
+                >
+                  Entrar com a Microsoft
+                </a>
               ) : (
                 <>
-                  <p className="text-sm font-medium text-text-primary">Falta ativar o login da Microsoft</p>
                   <p className="text-sm text-text-secondary">
-                    Outlook, Hotmail e Microsoft 365 só liberam os e-mails pelo login oficial da Microsoft. Isso é
-                    configurado uma única vez, em Configurações.
+                    Contas da Microsoft entram pelo login oficial, que ainda não foi ativado aqui.
                   </p>
-                  <Link href="/configuracoes#microsoft" className={`${primaryButton} inline-block`}>
-                    Abrir Configurações
+                  <Link href="/configuracoes#microsoft" className={btnPrimary}>
+                    Ativar em Configurações
                   </Link>
                 </>
               )}
-              <button type="button" className="block text-xs text-text-tertiary underline" onClick={() => setUsePassword(true)}>
-                Minha empresa liberou senha de app — conectar com senha
+              <button type="button" className={`${btnText} block text-xs`} onClick={() => setUsePassword(true)}>
+                Usar senha de app
               </button>
             </div>
           )}
 
           {showPassword && provider && (
             <>
-              {provider.steps.length > 0 && !usePassword && (
-                <div className="rounded-lg border border-card-border p-4">
-                  <ol className="list-decimal space-y-1 pl-5 text-sm text-text-secondary">
-                    {provider.steps.map((step) => (
-                      <li key={step}>{step}</li>
-                    ))}
-                  </ol>
+              {(provider.auth === "app-password" || provider.steps.length > 0) && !usePassword && (
+                <div className="rounded-lg bg-background-gray-secondary_alt px-4 py-3.5 text-sm text-text-secondary">
+                  {provider.auth === "app-password" && (
+                    <p className="mb-2">O {providerName} pede uma senha de app, não a senha normal.</p>
+                  )}
+                  {provider.steps.length > 0 && (
+                    <ol className="list-decimal space-y-1 pl-5">
+                      {provider.steps.map((step) => (
+                        <li key={step}>{step}</li>
+                      ))}
+                    </ol>
+                  )}
                   {provider.helpUrl && (
-                    <a href={provider.helpUrl} target="_blank" rel="noreferrer" className={`${quietButton} mt-3 inline-block`}>
-                      Abrir página de senhas de app ↗
+                    <a
+                      href={provider.helpUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-3 inline-block font-medium text-text-primary underline underline-offset-4"
+                    >
+                      Criar senha de app ↗
                     </a>
                   )}
                 </div>
@@ -280,9 +370,9 @@ export function EmailAccountsManager({
               </label>
 
               {advanced && (
-                <div className="grid gap-3 rounded-lg border border-card-border p-4 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-3">
                   <label className="block text-xs sm:col-span-2">
-                    <span className="mb-1 block font-medium text-text-secondary">Servidor IMAP</span>
+                    <span className="mb-1 block font-medium text-text-secondary">Servidor</span>
                     <input className={fieldClass} value={host} onChange={(event) => setHost(event.target.value)} list="imap-hosts" />
                     <datalist id="imap-hosts">
                       {[provider.host, ...(discovery?.alternatives ?? [])].map((item) => (
@@ -295,119 +385,31 @@ export function EmailAccountsManager({
                     <input className={fieldClass} value={port} onChange={(event) => setPort(event.target.value)} inputMode="numeric" />
                   </label>
                   <label className="block text-xs sm:col-span-3">
-                    <span className="mb-1 block font-medium text-text-secondary">Usuário (normalmente o próprio e-mail)</span>
+                    <span className="mb-1 block font-medium text-text-secondary">Usuário</span>
                     <input className={fieldClass} value={username} onChange={(event) => setUsername(event.target.value)} />
                   </label>
                 </div>
               )}
 
               {error && (
-                <p role="alert" className="rounded-lg border border-error-500/40 bg-error-500/5 px-4 py-3 text-sm text-error-500">
+                <p role="alert" className="rounded-lg bg-badge-error-background px-3.5 py-2.5 text-sm text-badge-error-text">
                   {error}
                 </p>
               )}
 
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <button type="submit" disabled={busy === "create" || !password} className={primaryButton}>
+                <button type="submit" disabled={busy === "create" || !password} className={btnPrimary}>
                   {busy === "create" ? "Conectando…" : "Conectar"}
                 </button>
-                <button type="button" className="text-xs text-text-tertiary underline" onClick={() => setAdvanced((value) => !value)}>
-                  {advanced ? "Ocultar ajustes do servidor" : `Servidor: ${host}:${port} · ajustar`}
-                </button>
+                {!advanced && (
+                  <button type="button" className={`${btnText} text-xs`} onClick={() => setAdvanced(true)}>
+                    Ajustar servidor
+                  </button>
+                )}
               </div>
             </>
           )}
         </form>
-      </Section>
-
-      <Section title={accounts.length === 0 ? "Nenhuma caixa conectada ainda" : "Caixas conectadas"}>
-        {accounts.length === 0 ? (
-          <p className="text-sm text-text-secondary">
-            Depois de conectar, o sistema busca boletos sozinho a cada 15 minutos (PDFs anexados e links de cobrança).
-          </p>
-        ) : (
-          <ul className="divide-y divide-card-border">
-            {accounts.map((account) => {
-              const state = !account.active ? "paused" : account.lastError ? "error" : "ok";
-              return (
-                <li key={account.id} className="py-4 first:pt-0 last:pb-0">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="flex items-center gap-2 text-sm font-medium text-text-primary">
-                        <span
-                          aria-hidden
-                          className={`size-2 shrink-0 rounded-full ${state === "ok" ? "bg-success-500" : state === "error" ? "bg-error-500" : "bg-gray-400"}`}
-                        />
-                        <span className="truncate">{account.email}</span>
-                      </p>
-                      <p className="mt-0.5 pl-4 text-xs text-text-tertiary">
-                        {PROVIDER_NAMES[account.provider ?? ""] ?? account.host} ·{" "}
-                        {state === "paused"
-                          ? "Pausada"
-                          : state === "error"
-                            ? "Com problema"
-                            : account.lastSyncAt
-                              ? `Verificada ${formatDateTime(account.lastSyncAt)}`
-                              : "Primeira busca em andamento…"}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        className={quietButton}
-                        disabled={busy === account.id}
-                        onClick={() => act(account.id, () => api(`/api/email-accounts/${account.id}/sync`, "POST"), "Buscando e-mails novos…")}
-                      >
-                        Buscar agora
-                      </button>
-                      <button
-                        className={quietButton}
-                        disabled={busy === account.id}
-                        onClick={() =>
-                          act(
-                            account.id,
-                            () => api(`/api/email-accounts/${account.id}`, "PATCH", { active: !account.active }),
-                            account.active ? "Caixa pausada." : "Caixa reativada.",
-                          )
-                        }
-                      >
-                        {account.active ? "Pausar" : "Reativar"}
-                      </button>
-                      <button
-                        className={`${quietButton} hover:text-error-500`}
-                        disabled={busy === account.id}
-                        onClick={() => {
-                          if (!window.confirm(`Remover ${account.email} e os e-mails/anexos vinculados?`)) return;
-                          void act(account.id, () => api(`/api/email-accounts/${account.id}`, "DELETE"), "Caixa removida.");
-                        }}
-                      >
-                        Remover
-                      </button>
-                    </div>
-                  </div>
-                  {state === "error" && (
-                    <div className="mt-2 ml-4 rounded-lg border border-error-500/40 bg-error-500/5 px-3 py-2">
-                      <p className="text-xs text-error-500">{account.lastError}</p>
-                      <div className="mt-2 flex gap-2">
-                        <button
-                          className={quietButton}
-                          disabled={busy === account.id}
-                          onClick={() => act(account.id, () => api(`/api/email-accounts/${account.id}/test`, "POST"), "Conexão ok.")}
-                        >
-                          Testar de novo
-                        </button>
-                        {account.authType === "microsoft" && (
-                          <a className={quietButton} href={`/api/email-accounts/oauth/microsoft/start?email=${encodeURIComponent(account.email)}`}>
-                            Entrar de novo com a Microsoft
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
       </Section>
     </div>
   );

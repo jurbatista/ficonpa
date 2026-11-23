@@ -27,12 +27,12 @@ export type TechnicalSettingsData = {
 
 function SourceTag({ source }: { source: Source }) {
   if (source === "database") {
-    return <span className="text-xs font-medium text-success-500">Configurado</span>;
+    return <span className="text-xs font-medium text-badge-success-text">Configurado</span>;
   }
   if (source === "environment") {
-    return <span className="text-xs font-medium text-success-500">Configurado na instalação</span>;
+    return <span className="text-xs font-medium text-badge-success-text">Configurado na instalação</span>;
   }
-  return <span className="text-xs font-medium text-warning-500">Não configurado</span>;
+  return <span className="text-xs font-medium text-badge-warning-text">Não configurado</span>;
 }
 
 function Label({ text, source }: { text: string; source?: Source }) {
@@ -125,11 +125,12 @@ export function TechnicalSettings({ data }: { data: TechnicalSettingsData }) {
   const [attempts, setAttempts] = useState(String(data.linkLearningAttempts));
   const [busy, setBusy] = useState(false);
 
-  // A tela de e-mails aponta para /configuracoes#microsoft: abre a seção e rola até lá.
+  // Outras telas apontam para /configuracoes#microsoft ou #conta-azul: abre a seção e rola até lá.
   useEffect(() => {
-    if (window.location.hash !== "#microsoft" || !details.current) return;
+    const target = window.location.hash.slice(1);
+    if (!["microsoft", "conta-azul"].includes(target) || !details.current) return;
     details.current.open = true;
-    document.getElementById("microsoft")?.scrollIntoView({ block: "start" });
+    document.getElementById(target)?.scrollIntoView({ block: "start" });
   }, []);
 
   const save = async (event: React.FormEvent) => {
@@ -202,9 +203,7 @@ export function TechnicalSettings({ data }: { data: TechnicalSettingsData }) {
       <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 [&::-webkit-details-marker]:hidden">
         <div>
           <h3 className="text-sm font-semibold text-text-primary">Configuração técnica</h3>
-          <p className="mt-0.5 text-xs text-text-secondary">
-            Feita uma vez, na instalação. Só altere com orientação do suporte.
-          </p>
+          <p className="mt-0.5 text-xs text-text-secondary">Feita uma vez, na instalação.</p>
         </div>
         <span className="shrink-0 text-sm font-medium text-text-secondary group-open:hidden">
           Mostrar
@@ -215,11 +214,9 @@ export function TechnicalSettings({ data }: { data: TechnicalSettingsData }) {
       </summary>
 
       <form onSubmit={save} className="space-y-8 border-t border-card-border p-5">
-        <div>
+        <div id="conta-azul" className="scroll-mt-24">
           <h4 className={groupTitle}>Conta Azul</h4>
-          <p className={groupHint}>
-            Dados do aplicativo criado no portal do desenvolvedor da Conta Azul.
-          </p>
+          <p className={groupHint}>Do aplicativo criado no portal de desenvolvedores da Conta Azul.</p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="block text-sm">
               <Label text="ID do aplicativo (client ID)" source={data.status.contaAzulClientId} />
@@ -248,16 +245,14 @@ export function TechnicalSettings({ data }: { data: TechnicalSettingsData }) {
               onChange={(event) => setRedirectUri(event.target.value)}
             />
             <span className="mt-1.5 block text-xs text-text-tertiary">
-              Precisa ser exatamente o mesmo endereço cadastrado no aplicativo da Conta Azul.
+              O mesmo endereço cadastrado no aplicativo.
             </span>
           </label>
         </div>
 
         <div id="microsoft" className="scroll-mt-24">
-          <h4 className={groupTitle}>E-mails da Microsoft (Outlook, Hotmail, Microsoft 365)</h4>
-          <p className={groupHint}>
-            Necessário só para conectar caixas da Microsoft. Gmail e os demais não precisam disso.
-          </p>
+          <h4 className={groupTitle}>Microsoft</h4>
+          <p className={groupHint}>Só para caixas Outlook, Hotmail e Microsoft 365.</p>
           <ol className="mt-4 list-decimal space-y-1.5 pl-5 text-sm text-text-secondary">
             <li>
               Em{" "}
@@ -269,23 +264,20 @@ export function TechnicalSettings({ data }: { data: TechnicalSettingsData }) {
               >
                 portal.azure.com → Registros de aplicativo
               </a>
-              , clique em “Novo registro”. Em tipos de conta, escolha “qualquer diretório e contas
-              pessoais”.
+              , crie um registro para “qualquer diretório e contas pessoais”.
             </li>
             <li>
-              Em URI de redirecionamento, escolha “Web” e cole:{" "}
+              Em URI de redirecionamento, escolha “Web” e cole{" "}
               <code className="rounded bg-gray-100 px-1 py-0.5 text-xs break-all dark:bg-white/10">
                 {data.microsoftRedirectUri}
               </code>
             </li>
             <li>
-              Em “Permissões de API”, adicione a permissão delegada{" "}
-              <code className="text-xs">IMAP.AccessAsUser.All</code> (Office 365 Exchange Online) e{" "}
-              <code className="text-xs">offline_access</code>.
+              Em “Permissões de API”, adicione <code className="text-xs">IMAP.AccessAsUser.All</code>{" "}
+              (Office 365 Exchange Online) e <code className="text-xs">offline_access</code>.
             </li>
             <li>
-              Em “Certificados e segredos”, crie um segredo e cole abaixo junto com o ID do
-              aplicativo.
+              Em “Certificados e segredos”, crie um segredo e cole abaixo com o ID do aplicativo.
             </li>
           </ol>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -312,7 +304,6 @@ export function TechnicalSettings({ data }: { data: TechnicalSettingsData }) {
 
         <div>
           <h4 className={groupTitle}>Ajustes finos</h4>
-          <p className={groupHint}>Os valores padrão atendem à maioria dos casos.</p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="block text-sm">
               <Label text="Certeza mínima para aceitar um boleto (%)" />
@@ -326,7 +317,7 @@ export function TechnicalSettings({ data }: { data: TechnicalSettingsData }) {
                 onChange={(event) => setReviewPercent(event.target.value)}
               />
               <span className="mt-1.5 block text-xs text-text-tertiary">
-                Padrão 80. Abaixo disso o documento é descartado como “não é boleto”.
+                Padrão 80. Abaixo disso o PDF é tratado como “não é boleto”.
               </span>
             </label>
             <label className="block text-sm">
@@ -341,7 +332,7 @@ export function TechnicalSettings({ data }: { data: TechnicalSettingsData }) {
                 onChange={(event) => setAttempts(event.target.value)}
               />
               <span className="mt-1.5 block text-xs text-text-tertiary">
-                Padrão 3. Quantas vezes tentar de novo quando o boleto não é encontrado no link.
+                Padrão 3.
               </span>
             </label>
           </div>
@@ -353,7 +344,7 @@ export function TechnicalSettings({ data }: { data: TechnicalSettingsData }) {
             disabled={busy}
             className="rounded-lg bg-button-primary-background px-5 py-2.5 text-sm font-medium text-button-primary-text transition hover:bg-button-primary-hover-background disabled:opacity-60"
           >
-            {busy ? "Salvando..." : "Salvar configuração técnica"}
+            {busy ? "Salvando…" : "Salvar"}
           </button>
         </div>
       </form>

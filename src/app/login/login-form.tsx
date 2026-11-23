@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { fieldClass } from "@/components/app/ui";
+import { btnPrimary, fieldClass } from "@/components/app/ui";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -29,7 +29,7 @@ export default function LoginForm() {
       router.replace(next && next.startsWith("/") ? next : "/");
       router.refresh();
     } catch {
-      setError("Falha de conexão. Tente novamente.");
+      setError("Sem conexão. Tente de novo.");
     } finally {
       setLoading(false);
     }
@@ -41,27 +41,28 @@ export default function LoginForm() {
       className="rounded-2xl border-[0.5px] border-card-border bg-card-background p-6 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.15)]"
     >
       <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-text-primary">
-        Senha de acesso
+        Senha
       </label>
       <input
         id="password"
         type="password"
         autoFocus
         autoComplete="current-password"
-        placeholder="Digite a senha do painel"
         value={password}
         onChange={(event) => setPassword(event.target.value)}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? "login-error" : undefined}
         className={fieldClass}
       />
 
-      {error && <p className="mt-2 text-sm text-input-error">{error}</p>}
+      {error && (
+        <p id="login-error" role="alert" className="mt-2 text-sm text-input-error">
+          {error}
+        </p>
+      )}
 
-      <button
-        type="submit"
-        disabled={loading || password.length === 0}
-        className="mt-4 flex h-11 w-full items-center justify-center rounded-lg bg-button-primary-background text-sm font-medium text-button-primary-text transition hover:bg-button-primary-hover-background disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {loading ? "Entrando..." : "Entrar"}
+      <button type="submit" disabled={loading || password.length === 0} className={`${btnPrimary} mt-4 h-11 w-full`}>
+        {loading ? "Entrando…" : "Entrar"}
       </button>
     </form>
   );

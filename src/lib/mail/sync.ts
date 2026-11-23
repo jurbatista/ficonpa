@@ -194,8 +194,9 @@ export async function syncEmailAccount(account: EmailAccount): Promise<SyncAccou
 
     return result;
   } catch (error) {
-    const message = describeImapError(error, account.host);
-    console.warn(`[imap] sync ${account.email}: ${message}`);
+    const problem = describeImapError(error, account.host);
+    const message = problem.message;
+    console.warn(`[imap] sync ${account.email}: ${problem.raw}`);
     result.error = message;
     await db
       .update(emailAccounts)

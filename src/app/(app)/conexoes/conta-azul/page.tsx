@@ -2,7 +2,7 @@ import { ContaAzulPanel, type ContaAzulView } from "@/components/app/conta-azul-
 import { PageHeader } from "@/components/app/ui";
 import { getConnection } from "@/lib/contaazul/connection";
 import { isContaAzulConfigured } from "@/lib/contaazul/oauth";
-import { countCatalogs } from "@/lib/contaazul/sync";
+import { getCatalogStatus } from "@/lib/contaazul/sync";
 
 export const dynamic = "force-dynamic";
 
@@ -11,38 +11,37 @@ export default async function ContaAzulPage({
 }: {
   searchParams: Promise<{ status?: string; message?: string }>;
 }) {
-  const params = await searchParams;
-  const connection = await getConnection();
-  const catalogs = connection ? await countCatalogs() : null;
+  const [params, connection, configured] = await Promise.all([
+    searchParams,
+    getConnection(),
+    isContaAzulConfigured(),
+  ]);
+  const catalogs = connection ? await getCatalogStatus() : null;
 
   const data: ContaAzulView = {
-    configured: await isContaAzulConfigured(),
+    configured,
     connected: Boolean(connection),
     companyName: connection?.companyName ?? null,
-    expiresAt: connection?.expiresAt ? connection.expiresAt.toISOString() : null,
-    updatedAt: connection?.updatedAt ? connection.updatedAt.toISOString() : null,
-    catalogs,
+    catalogs: catalogs && {
+      people: catalogs.people,
+      categories: catalogs.categories,
+      financialAccounts: catalogs.financialAccounts,
+      syncedAt: catalogs.syncedAt ? catalogs.syncedAt.toISOString() : null,
+    },
   };
+
+  const notice =
+    params.status === "ok"
+      ? { type: "ok" as const, message: params.message ?? null }
+      : params.status === "error"
+        ? { type: "erro" as const, message: params.message ?? null }
+        : null;
 
   return (
     <>
-      <PageHeader
-        title="Conta Azul"
-        description="Conexão OAuth e cadastros usados para classificar e lançar contas a pagar."
-      />
-      <div className="space-y-5 px-5 pb-8 lg:px-7">
-        {params.status === "ok" && (
-          <div className="rounded-xl border border-success-500/30 bg-badge-success-background px-4 py-3 text-sm text-badge-success-text">
-            Conta Azul conectado com sucesso.
-            {params.message ? ` Aviso: ${params.message}` : ""}
-          </div>
-        )}
-        {params.status === "error" && (
-          <div className="rounded-xl border border-error-500/30 bg-badge-error-background px-4 py-3 text-sm text-badge-error-text">
-            Não foi possível conectar: {params.message ?? "erro desconhecido"}.
-          </div>
-        )}
-        <ContaAzulPanel data={data} />
+      <PageHeader title="Conta Azul" />
+      <div className="px-5 pb-8 lg:px-7">
+        <ContaAzulPanel data={data} notice={notice} />
       </div>
     </>
   );

@@ -1,8 +1,9 @@
+import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { emailAccounts } from "@/db/schema";
 import { encryptSecret } from "@/lib/crypto";
-import { testImapConnection } from "@/lib/mail/imap";
+import { ImapError, testImapConnection } from "@/lib/mail/imap";
 import { discoverMailProvider, isValidEmail } from "@/lib/mail/providers";
 import { enqueue, QUEUE_NAMES } from "@/lib/queue";
 import { errorMessage, fail, ok, readJson } from "@/lib/api";
@@ -34,11 +35,6 @@ export async function GET() {
   );
 }
 
-/** Erros em que vale tentar o próximo servidor (o servidor está errado, não a senha). */
-function isHostProblem(message: string): boolean {
-  return /não encontrado|recusou a conexão|Tempo esgotado|SSL\/TLS/i.test(message);
-}
-
 export async function POST(request: Request) {
   try {
     const body = await readJson<Body>(request);
@@ -64,21 +60,30 @@ export async function POST(request: Request) {
     const cleanPassword = discovery.provider.id === "gmail" ? password.replace(/\s/g, "") : password;
     const passwordEnc = encryptSecret(cleanPassword);
 
+    // Tenta os servidores candidatos em ordem; só passa ao próximo se o problema for o servidor.
     let host = hosts[0];
-    let lastError = "";
-    let connected = false;
+    let failure: unknown = null;
     for (const candidate of hosts) {
       try {
         await testImapConnection({ host: candidate, port, secure, username, passwordEnc });
         host = candidate;
-        connected = true;
+        failure = null;
         break;
       } catch (error) {
-        lastError = errorMessage(error);
-        if (!isHostProblem(lastError)) break;
+        failure = error;
+        if (!(error instanceof ImapError) || error.kind !== "host") break;
       }
     }
-    if (!connected) return fail(lastError || "Não foi possível conectar.");
+    if (failure) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: errorMessage(failure) || "Não foi possível conectar.",
+          hostProblem: failure instanceof ImapError && failure.kind === "host",
+        },
+        { status: 400 },
+      );
+    }
 
     const [created] = await getDb()
       .insert(emailAccounts)

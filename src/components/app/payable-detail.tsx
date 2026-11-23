@@ -1,23 +1,20 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { fieldClass, StatusBadge } from "@/components/app/ui";
+import { btnOutline, btnPrimary, btnText, fieldClass } from "@/components/app/ui";
+import { Card } from "@/components/tailgrids/core/card";
 import type { CatalogItem } from "@/lib/catalogs";
-import { formatBRL, formatDateTime, formatPercent } from "@/lib/format";
-import { Badge } from "@/components/tailgrids/core/badge";
+import { formatDateTime, formatWhen, parseBRL, senderName, toInputBRL } from "@/lib/format";
 
 export type PayableDetailData = {
   id: string;
   documentId: string;
   attachmentId: string;
-  filename: string;
   status: string;
-  origin: string;
+  auto: boolean;
   supplierId: string | null;
-  supplierName: string | null;
-  supplierDocument: string | null;
   categoryId: string | null;
   financialAccountId: string | null;
   costCenterId: string | null;
@@ -25,390 +22,278 @@ export type PayableDetailData = {
   value: string | null;
   dueDate: string | null;
   competenceDate: string | null;
-  error: string | null;
   postedAt: string | null;
-  contaAzulEventId: string | null;
-  createdAt: string;
-  documentStatus: string;
-  confidence: string | null;
-  needsAttention: boolean;
-  attentionReason: string | null;
+  /** O que impede o lançamento, em uma frase. */
+  note: string | null;
   emailSubject: string | null;
   emailFrom: string | null;
-  emailReceivedAt: string | null;
+  emailReceivedAt: string;
 };
 
-export function PayableDetail({
-  data,
-  catalogs,
-}: {
-  data: PayableDetailData;
-  catalogs: {
-    people: CatalogItem[];
-    categories: CatalogItem[];
-    financialAccounts: CatalogItem[];
-    costCenters: CatalogItem[];
-  };
-}) {
+type Catalogs = {
+  people: CatalogItem[];
+  categories: CatalogItem[];
+  financialAccounts: CatalogItem[];
+  costCenters: CatalogItem[];
+};
+
+type Busy = "save" | "launch" | "discard" | "restore" | "reread" | null;
+
+async function send(path: string, method: "POST" | "PATCH", body?: unknown) {
+  const response = await fetch(path, {
+    method,
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const payload = (await response.json().catch(() => ({ ok: false }))) as { ok: boolean; error?: string };
+  if (!response.ok || !payload.ok) throw new Error(payload.error ?? "Não deu certo. Tente de novo.");
+}
+
+function Field({ label, wide, children }: { label: string; wide?: boolean; children: React.ReactNode }) {
+  return (
+    <label className={`block text-sm ${wide ? "sm:col-span-2" : ""}`}>
+      <span className="mb-1.5 block font-medium text-text-primary">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+export function PayableDetail({ data, catalogs }: { data: PayableDetailData; catalogs: Catalogs }) {
   const router = useRouter();
-  const [form, setForm] = useState({
+  const saved = {
     supplierId: data.supplierId ?? "",
-    description: data.description ?? "",
-    value: data.value ?? "",
+    value: toInputBRL(data.value),
     dueDate: data.dueDate ?? "",
-    competenceDate: data.competenceDate ?? "",
     categoryId: data.categoryId ?? "",
     financialAccountId: data.financialAccountId ?? "",
     costCenterId: data.costCenterId ?? "",
-  });
-  const [busy, setBusy] = useState<"save" | "approve" | "reject" | null>(null);
+    competenceDate: data.competenceDate ?? "",
+    description: data.description ?? "",
+  };
+  const [form, setForm] = useState(saved);
+  const [busy, setBusy] = useState<Busy>(null);
 
-  const isPosted = data.status === "POSTED";
-  const isRejected = data.status === "REJECTED";
-  const locked = isPosted || isRejected;
+  const posted = data.status === "POSTED";
+  const posting = data.status === "APPROVED";
+  const discarded = data.status === "REJECTED";
+  const locked = posted || posting || discarded;
+  const dirty = (Object.keys(saved) as (keyof typeof saved)[]).some((key) => saved[key] !== form[key]);
 
-  const set = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
-    setForm((previous) => ({ ...previous, [key]: event.target.value }));
+  // Enquanto o lançamento está a caminho do Conta Azul, acompanha até terminar.
+  useEffect(() => {
+    if (!posting) return;
+    const timer = setInterval(() => router.refresh(), 3000);
+    return () => clearInterval(timer);
+  }, [posting, router]);
 
-  const save = async () => {
-    setBusy("save");
+  const set =
+    (key: keyof typeof form) =>
+    (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      setForm((previous) => ({ ...previous, [key]: event.target.value }));
+
+  const run = async (action: Exclude<Busy, null>, work: () => Promise<void>, success: string) => {
+    setBusy(action);
     try {
-      const supplier = catalogs.people.find((item) => item.id === form.supplierId);
-      const category = catalogs.categories.find((item) => item.id === form.categoryId);
-      const account = catalogs.financialAccounts.find((item) => item.id === form.financialAccountId);
-      const center = catalogs.costCenters.find((item) => item.id === form.costCenterId);
-
-      const response = await fetch("/api/payables", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: data.id,
-          supplierId: form.supplierId || undefined,
-          supplierName: supplier?.name,
-          categoryId: form.categoryId || undefined,
-          categoryName: category?.name,
-          financialAccountId: form.financialAccountId || undefined,
-          financialAccountName: account?.name,
-          costCenterId: form.costCenterId || null,
-          costCenterName: center?.name ?? null,
-          description: form.description || undefined,
-          value: form.value ? Number(form.value) : undefined,
-          dueDate: form.dueDate || undefined,
-          competenceDate: form.competenceDate || undefined,
-        }),
-      });
-      const payload = (await response.json()) as { ok: boolean; error?: string };
-      if (!response.ok || !payload.ok) throw new Error(payload.error ?? "Falha ao salvar.");
-      toast.success("Alterações salvas.");
+      await work();
+      toast.success(success);
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao salvar.");
+      toast.error(error instanceof Error ? error.message : "Não deu certo. Tente de novo.");
     } finally {
       setBusy(null);
     }
   };
 
-  const approve = async () => {
-    setBusy("approve");
-    try {
-      const response = await fetch(`/api/payables/${data.id}/approve`, { method: "POST" });
-      const payload = (await response.json()) as { ok: boolean; error?: string };
-      if (!response.ok || !payload.ok) throw new Error(payload.error ?? "Falha ao aprovar.");
-      toast.success("Lançamento enviado para a fila do Conta Azul.");
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao aprovar.");
-    } finally {
-      setBusy(null);
-    }
+  const save = () => {
+    const name = (list: CatalogItem[], id: string) => list.find((item) => item.id === id)?.name;
+    return send("/api/payables", "PATCH", {
+      id: data.id,
+      supplierId: form.supplierId || undefined,
+      supplierName: name(catalogs.people, form.supplierId),
+      categoryId: form.categoryId || undefined,
+      categoryName: name(catalogs.categories, form.categoryId),
+      financialAccountId: form.financialAccountId || undefined,
+      financialAccountName: name(catalogs.financialAccounts, form.financialAccountId),
+      costCenterId: form.costCenterId || null,
+      costCenterName: name(catalogs.costCenters, form.costCenterId) ?? null,
+      description: form.description || undefined,
+      value: parseBRL(form.value) ?? undefined,
+      dueDate: form.dueDate || undefined,
+      competenceDate: form.competenceDate || form.dueDate || undefined,
+    });
   };
 
-  const reject = async () => {
-    setBusy("reject");
-    try {
-      const response = await fetch(`/api/payables/${data.id}/reject`, { method: "POST" });
-      const payload = (await response.json()) as { ok: boolean; error?: string };
-      if (!response.ok || !payload.ok) throw new Error(payload.error ?? "Falha ao rejeitar.");
-      toast.success("Lançamento rejeitado.");
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao rejeitar.");
-    } finally {
-      setBusy(null);
+  const launch = () => {
+    const missing = [
+      !form.supplierId && "fornecedor",
+      parseBRL(form.value) === null && "valor",
+      !form.dueDate && "vencimento",
+      !form.categoryId && "categoria",
+      !form.financialAccountId && "conta",
+    ].filter(Boolean);
+    if (missing.length > 0) {
+      toast.error(`Falta preencher: ${missing.join(", ")}.`);
+      return;
     }
+    void run(
+      "launch",
+      async () => {
+        await save();
+        await send(`/api/payables/${data.id}/approve`, "POST");
+      },
+      "Lançando no Conta Azul…",
+    );
   };
 
-  const reprocess = async () => {
-    setBusy("save");
-    try {
-      const response = await fetch(`/api/documents/${data.documentId}/reprocess`, {
-        method: "POST",
-      });
-      const payload = (await response.json()) as { ok: boolean; error?: string };
-      if (!response.ok || !payload.ok) throw new Error(payload.error ?? "Falha ao reprocessar.");
-      toast.success("Documento enviado para reprocessamento.");
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao reprocessar.");
-    } finally {
-      setBusy(null);
-    }
+  const reread = () => {
+    if (!window.confirm("Ler o boleto de novo? O que foi alterado aqui será substituído.")) return;
+    void run("reread", () => send(`/api/documents/${data.documentId}/reprocess`, "POST"), "Lendo o boleto de novo…");
   };
 
   return (
-    <div className="grid gap-5 px-5 pb-8 lg:grid-cols-[minmax(0,1fr)_380px] lg:px-7">
-      <div className="space-y-5">
-        <div className="rounded-xl border border-card-border bg-card-background p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-text-tertiary">Fornecedor</p>
-              <p className="text-lg font-semibold text-text-primary">
-                {data.supplierName ?? "Não identificado"}
-              </p>
-              <p className="text-xs text-text-tertiary">{data.supplierDocument ?? "Sem documento"}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <StatusBadge status={data.status} />
-              <Badge color={data.origin === "auto" ? "violet" : "gray"} size="sm">
-                {data.origin === "auto" ? "Automático" : "Manual"}
-              </Badge>
-            </div>
-          </div>
+    <div className="grid items-start gap-5 px-5 pb-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] lg:px-7">
+      <Card className="p-5">
+        {data.note && !locked && (
+          <p className="mb-5 rounded-lg bg-badge-warning-background px-3.5 py-2.5 text-sm text-badge-warning-text">
+            {data.note}
+          </p>
+        )}
 
-          <dl className="mt-4 grid grid-cols-2 gap-4 border-t border-card-border pt-4 text-sm sm:grid-cols-4">
-            <div>
-              <dt className="text-xs text-text-tertiary">Valor</dt>
-              <dd className="font-semibold text-text-primary">{formatBRL(data.value)}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-text-tertiary">Vencimento</dt>
-              <dd className="text-text-primary">{data.dueDate ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-text-tertiary">Confiança</dt>
-              <dd className="text-text-primary">{formatPercent(data.confidence)}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-text-tertiary">Recebido em</dt>
-              <dd className="text-text-primary">{formatDateTime(data.createdAt)}</dd>
-            </div>
-          </dl>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Fornecedor" wide>
+            <select className={fieldClass} value={form.supplierId} onChange={set("supplierId")} disabled={locked}>
+              <option value="">Escolha…</option>
+              {catalogs.people.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                  {item.detail ? ` — ${item.detail}` : ""}
+                </option>
+              ))}
+            </select>
+          </Field>
 
-          {(data.needsAttention || data.error) && (
-            <p className="mt-4 rounded-lg bg-badge-warning-background px-3 py-2 text-xs text-badge-warning-text">
-              {data.attentionReason ?? data.error}
+          <Field label="Valor (R$)">
+            <input className={fieldClass} value={form.value} onChange={set("value")} inputMode="decimal" disabled={locked} />
+          </Field>
+          <Field label="Vencimento">
+            <input type="date" className={fieldClass} value={form.dueDate} onChange={set("dueDate")} disabled={locked} />
+          </Field>
+
+          <Field label="Categoria">
+            <select className={fieldClass} value={form.categoryId} onChange={set("categoryId")} disabled={locked}>
+              <option value="">Escolha…</option>
+              {catalogs.categories.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Conta">
+            <select
+              className={fieldClass}
+              value={form.financialAccountId}
+              onChange={set("financialAccountId")}
+              disabled={locked}
+            >
+              <option value="">Escolha…</option>
+              {catalogs.financialAccounts.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Centro de custo">
+            <select className={fieldClass} value={form.costCenterId} onChange={set("costCenterId")} disabled={locked}>
+              <option value="">Nenhum</option>
+              {catalogs.costCenters.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Competência">
+            <input
+              type="date"
+              className={fieldClass}
+              value={form.competenceDate}
+              onChange={set("competenceDate")}
+              disabled={locked}
+            />
+          </Field>
+
+          <Field label="Descrição" wide>
+            <input className={fieldClass} value={form.description} onChange={set("description")} disabled={locked} />
+          </Field>
+        </div>
+
+        <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-card-border pt-5">
+          {posted && (
+            <p className="text-sm text-text-secondary">
+              Lançado no Conta Azul em {formatDateTime(data.postedAt)}
+              {data.auto ? ", automaticamente" : ""}.
             </p>
           )}
-        </div>
-
-        <div className="rounded-xl border border-card-border bg-card-background p-5">
-          <h3 className="text-sm font-semibold text-text-primary">Dados do lançamento</h3>
-          <p className="mt-0.5 text-xs text-text-secondary">
-            Revise os campos antes de enviar ao Conta Azul.
-          </p>
-
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <label className="block text-sm">
-              <span className="mb-1.5 block font-medium text-text-primary">Fornecedor</span>
-              <select
-                className={fieldClass}
-                value={form.supplierId}
-                onChange={set("supplierId")}
-                disabled={locked}
-              >
-                <option value="">Selecione...</option>
-                {catalogs.people.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                    {item.detail ? ` — ${item.detail}` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block text-sm">
-              <span className="mb-1.5 block font-medium text-text-primary">Descrição</span>
-              <input
-                className={fieldClass}
-                value={form.description}
-                onChange={set("description")}
-                disabled={locked}
-              />
-            </label>
-
-            <label className="block text-sm">
-              <span className="mb-1.5 block font-medium text-text-primary">Valor (R$)</span>
-              <input
-                className={fieldClass}
-                value={form.value}
-                onChange={set("value")}
-                inputMode="decimal"
-                disabled={locked}
-              />
-            </label>
-
-            <label className="block text-sm">
-              <span className="mb-1.5 block font-medium text-text-primary">Vencimento</span>
-              <input
-                type="date"
-                className={fieldClass}
-                value={form.dueDate}
-                onChange={set("dueDate")}
-                disabled={locked}
-              />
-            </label>
-
-            <label className="block text-sm">
-              <span className="mb-1.5 block font-medium text-text-primary">Competência</span>
-              <input
-                type="date"
-                className={fieldClass}
-                value={form.competenceDate}
-                onChange={set("competenceDate")}
-                disabled={locked}
-              />
-            </label>
-
-            <label className="block text-sm">
-              <span className="mb-1.5 block font-medium text-text-primary">Categoria</span>
-              <select
-                className={fieldClass}
-                value={form.categoryId}
-                onChange={set("categoryId")}
-                disabled={locked}
-              >
-                <option value="">Selecione...</option>
-                {catalogs.categories.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block text-sm">
-              <span className="mb-1.5 block font-medium text-text-primary">Conta financeira</span>
-              <select
-                className={fieldClass}
-                value={form.financialAccountId}
-                onChange={set("financialAccountId")}
-                disabled={locked}
-              >
-                <option value="">Selecione...</option>
-                {catalogs.financialAccounts.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                    {item.detail ? ` — ${item.detail}` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block text-sm">
-              <span className="mb-1.5 block font-medium text-text-primary">Centro de custo</span>
-              <select
-                className={fieldClass}
-                value={form.costCenterId}
-                onChange={set("costCenterId")}
-                disabled={locked}
-              >
-                <option value="">Sem centro de custo</option>
-                {catalogs.costCenters.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-card-border pt-4">
-            {!locked && (
-              <>
-                <button
-                  onClick={save}
-                  disabled={busy !== null}
-                  className="rounded-lg border border-button-primary-outline-stroke px-4 py-2 text-sm font-medium text-button-primary-outline-text transition hover:bg-button-primary-outline-hover-background disabled:opacity-60"
-                >
-                  {busy === "save" ? "Salvando..." : "Salvar alterações"}
-                </button>
-                <button
-                  onClick={approve}
-                  disabled={busy !== null}
-                  className="rounded-lg bg-button-primary-background px-4 py-2 text-sm font-medium text-button-primary-text transition hover:bg-button-primary-hover-background disabled:opacity-60"
-                >
-                  {busy === "approve" ? "Enviando..." : "Aprovar e lançar"}
-                </button>
-                <button
-                  onClick={reject}
-                  disabled={busy !== null}
-                  className="rounded-lg border border-button-error-outline-stroke px-4 py-2 text-sm font-medium text-button-error-outline-text transition hover:bg-button-error-outline-hover-background disabled:opacity-60"
-                >
-                  {busy === "reject" ? "Rejeitando..." : "Rejeitar"}
-                </button>
-              </>
-            )}
+          {posting && <p className="text-sm text-text-secondary">Lançando no Conta Azul…</p>}
+          {discarded && (
             <button
-              onClick={reprocess}
+              className={btnOutline}
               disabled={busy !== null}
-              className="rounded-lg border border-card-border px-4 py-2 text-sm font-medium text-text-secondary transition hover:text-text-primary disabled:opacity-60"
+              onClick={() => run("restore", () => send(`/api/payables/${data.id}/restore`, "POST"), "Boleto restaurado.")}
             >
-              Reprocessar documento
+              {busy === "restore" ? "Restaurando…" : "Restaurar"}
             </button>
-          </div>
+          )}
+          {!locked && (
+            <>
+              <button className={btnPrimary} disabled={busy !== null} onClick={launch}>
+                {busy === "launch" ? "Enviando…" : "Lançar no Conta Azul"}
+              </button>
+              <button
+                className={btnOutline}
+                disabled={busy !== null || !dirty}
+                onClick={() => run("save", save, "Salvo.")}
+              >
+                {busy === "save" ? "Salvando…" : "Salvar"}
+              </button>
+              <button
+                className={`${btnText} ml-auto`}
+                disabled={busy !== null}
+                onClick={() => run("discard", () => send(`/api/payables/${data.id}/reject`, "POST"), "Descartado.")}
+              >
+                Descartar
+              </button>
+            </>
+          )}
         </div>
-      </div>
+      </Card>
 
-      <div className="space-y-5">
-        <div className="rounded-xl border border-card-border bg-card-background p-5">
-          <h3 className="text-sm font-semibold text-text-primary">Boleto original</h3>
-          <p className="mt-0.5 truncate text-xs text-text-secondary">{data.filename}</p>
-          <a
-            href={`/api/attachments/${data.attachmentId}`}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-3 inline-flex rounded-lg border border-card-border px-3.5 py-2 text-xs font-medium text-text-secondary transition hover:text-text-primary"
-          >
-            Abrir PDF em nova aba
+      <Card className="p-5">
+        <iframe
+          src={`/api/attachments/${data.attachmentId}`}
+          className="h-[460px] w-full rounded-lg border border-card-border bg-white"
+          title="Boleto"
+        />
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <a href={`/api/attachments/${data.attachmentId}`} target="_blank" rel="noreferrer" className={btnText}>
+            Abrir PDF
           </a>
-          <iframe
-            src={`/api/attachments/${data.attachmentId}`}
-            className="mt-3 h-[420px] w-full rounded-lg border border-card-border"
-            title="Pré-visualização do boleto"
-          />
+          {!locked && (
+            <button className={btnText} disabled={busy !== null} onClick={reread}>
+              {busy === "reread" ? "Enviando…" : "Ler de novo"}
+            </button>
+          )}
         </div>
-
-        <div className="rounded-xl border border-card-border bg-card-background p-5">
-          <h3 className="text-sm font-semibold text-text-primary">Origem</h3>
-          <dl className="mt-3 space-y-3 text-sm">
-            <div>
-              <dt className="text-xs text-text-tertiary">Assunto</dt>
-              <dd className="text-text-primary">{data.emailSubject ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-text-tertiary">Remetente</dt>
-              <dd className="break-all text-text-primary">{data.emailFrom ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-text-tertiary">Recebido no e-mail</dt>
-              <dd className="text-text-primary">{formatDateTime(data.emailReceivedAt)}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-text-tertiary">Status do documento</dt>
-              <dd className="text-text-primary">{data.documentStatus}</dd>
-            </div>
-          </dl>
-        </div>
-
-        {isPosted && (
-          <div className="rounded-xl border border-success-500/30 bg-badge-success-background p-5">
-            <h3 className="text-sm font-semibold text-badge-success-text">Lançado no Conta Azul</h3>
-            <p className="mt-1 text-xs text-badge-success-text">
-              Em {formatDateTime(data.postedAt)} · ID {data.contaAzulEventId ?? "—"}
-            </p>
-          </div>
-        )}
-      </div>
+        <p className="mt-4 border-t border-card-border pt-4 text-xs leading-5 text-text-tertiary">
+          {data.emailSubject && <span className="block truncate text-text-secondary">{data.emailSubject}</span>}
+          <span className="block truncate">
+            {[senderName(data.emailFrom), formatWhen(data.emailReceivedAt)].filter(Boolean).join(" · ")}
+          </span>
+        </p>
+      </Card>
     </div>
   );
 }

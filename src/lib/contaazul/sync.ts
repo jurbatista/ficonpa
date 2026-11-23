@@ -211,6 +211,3 @@ export async function getCatalogStatus() {
     syncedAt: people?.syncedAt ?? null,
   };
 }
-
-/** Nome antigo, ainda usado pela tela do Conta Azul. */
-export const countCatalogs = getCatalogStatus;
