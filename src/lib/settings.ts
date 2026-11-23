@@ -11,6 +11,9 @@ export type AppSettings = {
   jevEnabled: boolean;
   jevModel: string;
   qwenModel: string;
+  linkResolverEnabled: boolean;
+  linkAgentModel: string;
+  linkLearningAttempts: number;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -22,6 +25,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   jevEnabled: true,
   jevModel: process.env.JEV_MODEL ?? "typesafe/jev-1.14",
   qwenModel: process.env.OPENROUTER_MODEL ?? "qwen/qwen3-vl-235b-a22b-instruct",
+  linkResolverEnabled: true,
+  linkAgentModel:
+    process.env.LINK_AGENT_MODEL ?? process.env.OPENROUTER_MODEL ?? "qwen/qwen3-vl-235b-a22b-instruct",
+  linkLearningAttempts: 3,
 };
 
 const KEY_MAP: Record<keyof AppSettings, string> = {
@@ -33,6 +40,9 @@ const KEY_MAP: Record<keyof AppSettings, string> = {
   jevEnabled: "jev_enabled",
   jevModel: "jev_model",
   qwenModel: "qwen_model",
+  linkResolverEnabled: "link_resolver_enabled",
+  linkAgentModel: "link_agent_model",
+  linkLearningAttempts: "link_learning_attempts",
 };
 
 export async function getSettings(): Promise<AppSettings> {

@@ -1,19 +1,20 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { and, eq } from "drizzle-orm";
 import { simpleParser } from "mailparser";
 import { getDb } from "@/lib/db";
-import { attachments, emailAccounts, emailMessages } from "@/db/schema";
-import { attachmentDir } from "@/lib/env";
+import { emailAccounts, emailLinks, emailMessages, linkRecipes } from "@/db/schema";
 import { sha256 } from "@/lib/crypto";
-import { enqueue, QUEUE_NAMES } from "@/lib/queue";
+import { enqueue, LINK_JOB_OPTIONS, QUEUE_NAMES } from "@/lib/queue";
+import { getSettings } from "@/lib/settings";
+import { extractLinkCandidates } from "@/lib/links/extract";
 import { createImapClient, hasPdfPart } from "./imap";
+import { storePdfAttachment } from "./store";
 import type { EmailAccount } from "@/db/schema";
 
 export type SyncAccountResult = {
   scanned: number;
   newMessages: number;
   attachments: number;
+  links: number;
   skipped: number;
   error?: string;
 };
@@ -26,10 +27,15 @@ export async function syncEmailAccount(account: EmailAccount): Promise<SyncAccou
     scanned: 0,
     newMessages: 0,
     attachments: 0,
+    links: 0,
     skipped: 0,
   };
   const db = getDb();
   const client = createImapClient(account);
+  const { linkResolverEnabled: scanLinks } = await getSettings();
+  const knownHosts = scanLinks
+    ? (await db.selectDistinct({ host: linkRecipes.host }).from(linkRecipes)).map((row) => row.host)
+    : [];
 
   try {
     await client.connect();
@@ -93,7 +99,8 @@ export async function syncEmailAccount(account: EmailAccount): Promise<SyncAccou
         result.skipped += 1;
         continue;
       }
-      if (!hasPdfPart(message.bodyStructure as never)) {
+      const hasPdf = hasPdfPart(message.bodyStructure as never);
+      if (!hasPdf && !scanLinks) {
         result.skipped += 1;
         continue;
       }
@@ -138,29 +145,37 @@ export async function syncEmailAccount(account: EmailAccount): Promise<SyncAccou
       for (const pdf of pdfs.slice(0, MAX_ATTACHMENTS)) {
         const content = pdf.content;
         if (!content || content.length === 0) continue;
-        const digest = sha256(content);
-        const filename = pdf.filename ?? `${digest.slice(0, 8)}.pdf`;
-        const dir = attachmentDir();
-        const filePath = path.join(dir, `${digest}.pdf`);
-        await mkdir(dir, { recursive: true });
-        await writeFile(filePath, content);
+        const stored = await storePdfAttachment({
+          messageId: inserted.id,
+          filename: pdf.filename ?? `${sha256(content).slice(0, 8)}.pdf`,
+          content,
+        });
+        if (stored.created) result.attachments += 1;
+      }
 
-        const [attachmentRow] = await db
-          .insert(attachments)
-          .values({
-            messageId: inserted.id,
-            filename,
-            mimeType: "application/pdf",
-            size: content.length,
-            sha256: digest,
-            path: filePath,
-          })
-          .onConflictDoNothing()
-          .returning({ id: attachments.id });
-
-        if (!attachmentRow) continue;
-        result.attachments += 1;
-        await enqueue(QUEUE_NAMES.processDocument, { attachmentId: attachmentRow.id });
+      // Sem PDF anexado: procura links de cobrança no corpo (lido só em memória).
+      if (pdfs.length === 0 && scanLinks) {
+        const candidates = extractLinkCandidates({
+          html: typeof parsed.html === "string" ? parsed.html : null,
+          text: parsed.text ?? null,
+          subject: parsed.subject ?? null,
+          knownHosts,
+        });
+        for (const candidate of candidates) {
+          const [link] = await db
+            .insert(emailLinks)
+            .values({
+              messageId: inserted.id,
+              url: candidate.url,
+              host: new URL(candidate.url).hostname,
+              anchorText: candidate.anchorText,
+            })
+            .onConflictDoNothing()
+            .returning({ id: emailLinks.id });
+          if (!link) continue;
+          result.links += 1;
+          await enqueue(QUEUE_NAMES.resolveLink, { linkId: link.id }, LINK_JOB_OPTIONS);
+        }
       }
     }
 

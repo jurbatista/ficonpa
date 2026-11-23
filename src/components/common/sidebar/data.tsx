@@ -4,6 +4,7 @@ import {
   HomeIcon,
   InvoiceIcon,
   LetterIcon,
+  LinkIcon,
   UserGroupIcon,
 } from "./icon";
 
@@ -44,6 +45,12 @@ export const NAV_DATA: NavSection[] = [
         title: "E-mails",
         url: "/conexoes/emails",
         icon: <LetterIcon />,
+        items: [],
+      },
+      {
+        title: "Links de boleto",
+        url: "/conexoes/links",
+        icon: <LinkIcon />,
         items: [],
       },
       {

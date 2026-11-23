@@ -11,6 +11,9 @@ const schema = z.object({
   jevEnabled: z.boolean().optional(),
   jevModel: z.string().min(1).optional(),
   qwenModel: z.string().min(1).optional(),
+  linkResolverEnabled: z.boolean().optional(),
+  linkAgentModel: z.string().min(1).optional(),
+  linkLearningAttempts: z.number().int().min(1).max(6).optional(),
 });
 
 export async function GET() {

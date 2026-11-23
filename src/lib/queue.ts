@@ -6,7 +6,17 @@ export const QUEUE_NAMES = {
   processDocument: "process-document",
   postPayable: "post-payable",
   purge: "purge-old",
+  resolveLink: "resolve-link",
 } as const;
+
+/**
+ * Links: o próprio resolvedor já repete o aprendizado internamente. A fila só
+ * re-tenta quando o site está fora do ar (erro lançado de propósito), com espera longa.
+ */
+export const LINK_JOB_OPTIONS: JobsOptions = {
+  attempts: 4,
+  backoff: { type: "exponential", delay: 15 * 60_000 },
+};
 
 let connection: IORedis | null = null;
 const queues = new Map<string, Queue>();

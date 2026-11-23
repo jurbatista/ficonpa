@@ -365,3 +365,22 @@ export function AuthIcon() {
     </svg>
   );
 }
+
+export function LinkIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={18} height={18} viewBox="0 0 18 18" fill="none">
+      <path
+        d="M7.5 10.5a3.18 3.18 0 0 0 4.5 0l2.25-2.25a3.18 3.18 0 0 0-4.5-4.5L8.625 4.875"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M10.5 7.5a3.18 3.18 0 0 0-4.5 0L3.75 9.75a3.18 3.18 0 0 0 4.5 4.5l1.125-1.125"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}

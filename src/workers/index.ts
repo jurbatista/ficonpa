@@ -16,6 +16,8 @@ import { processAttachment } from "@/lib/pipeline/process-document";
 import { postPayable } from "@/lib/payables/post";
 import { getSettings } from "@/lib/settings";
 import { logAudit } from "@/lib/audit";
+import { resolveEmailLink } from "@/lib/links/jobs";
+import { closeSharedBrowser } from "@/lib/links/resolve";
 
 function log(message: string, extra?: unknown) {
   const suffix = extra === undefined ? "" : ` ${JSON.stringify(extra)}`;
@@ -147,7 +149,21 @@ async function main() {
     { connection: redisConnection(), concurrency: 1 },
   );
 
-  for (const worker of [mailWorker, documentWorker, postWorker, purgeWorker]) {
+  // Um link por vez: cada resolução abre um navegador headless.
+  const linkWorker = new Worker(
+    QUEUE_NAMES.resolveLink,
+    async (job) => {
+      const { linkId } = job.data as { linkId: string };
+      const final = job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
+      log("resolvendo link", { linkId, tentativa: job.attemptsMade + 1 });
+      const result = await resolveEmailLink(linkId, { final });
+      log("link resolvido", { linkId, ...result });
+      return result;
+    },
+    { connection: redisConnection(), concurrency: 1, lockDuration: 10 * 60_000 },
+  );
+
+  for (const worker of [mailWorker, documentWorker, postWorker, purgeWorker, linkWorker]) {
     worker.on("failed", (job, error) => {
       log(`job falhou ${job?.queueName}/${job?.name}`, { error: error.message });
     });
@@ -170,6 +186,7 @@ async function main() {
 
 process.on("SIGTERM", async () => {
   log("encerrando");
+  await closeSharedBrowser();
   process.exit(0);
 });
 

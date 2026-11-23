@@ -3,6 +3,7 @@
 FROM node:22-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
@@ -15,10 +16,13 @@ COPY . .
 RUN npm run build
 
 FROM node:22-alpine AS runner
-RUN apk add --no-cache libc6-compat
+# Chromium do sistema para o agente que busca boletos em links (Playwright usa via CHROMIUM_PATH).
+RUN apk add --no-cache libc6-compat chromium nss freetype harfbuzz ca-certificates ttf-freefont font-noto
 WORKDIR /app
 ENV NODE_ENV=production \
-    NEXT_TELEMETRY_DISABLED=1
+    NEXT_TELEMETRY_DISABLED=1 \
+    CHROMIUM_PATH=/usr/bin/chromium \
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
 

@@ -112,6 +112,13 @@ const STATUS: Record<string, { label: string; color: BadgeColor }> = {
   READY: { label: "Pronto", color: "primary" },
   DUPLICATE: { label: "Duplicado", color: "violet" },
   ERROR: { label: "Erro", color: "error" },
+  RESOLVING: { label: "Buscando boleto", color: "sky" },
+  RESOLVED: { label: "Boleto obtido", color: "success" },
+  CAPTCHA: { label: "Captcha", color: "warning" },
+  UNAVAILABLE: { label: "Fora do ar", color: "orange" },
+  NOT_FOUND: { label: "Sem boleto", color: "gray" },
+  NEEDS_HUMAN: { label: "Precisa de você", color: "warning" },
+  BLOCKED: { label: "Bloqueado", color: "error" },
 };
 
 export function StatusBadge({ status }: { status: string }) {

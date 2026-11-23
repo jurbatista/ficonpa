@@ -73,12 +73,74 @@ export const attachments = pgTable(
     sha256: text("sha256").notNull(),
     path: text("path").notNull(),
     pages: integer("pages"),
+    /** "email" = anexo do e-mail; "link" = PDF baixado a partir de um link no corpo. */
+    source: text("source").notNull().default("email"),
+    sourceUrl: text("source_url"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex("attachments_sha256_uq").on(t.sha256),
     index("attachments_created_idx").on(t.createdAt),
   ],
+);
+
+/**
+ * Links de cobrança encontrados no corpo dos e-mails. Só a URL é guardada;
+ * o corpo do e-mail continua sem ser armazenado.
+ *
+ * status: PENDING | RESOLVING | RESOLVED | CAPTCHA | UNAVAILABLE | NOT_FOUND | FAILED
+ */
+export const emailLinks = pgTable(
+  "email_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** null = link testado manualmente pela tela "Links". */
+    messageId: uuid("message_id").references(() => emailMessages.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    finalUrl: text("final_url"),
+    host: text("host"),
+    anchorText: text("anchor_text"),
+    status: text("status").notNull().default("PENDING"),
+    method: text("method"), // recipe | learned | relearned
+    recipeId: uuid("recipe_id"),
+    attachmentId: uuid("attachment_id"),
+    attempts: integer("attempts").notNull().default(0),
+    error: text("error"),
+    trace: jsonb("trace"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("email_links_message_url_uq").on(t.messageId, t.url),
+    index("email_links_status_idx").on(t.status),
+    index("email_links_created_idx").on(t.createdAt),
+  ],
+);
+
+/**
+ * Caminho aprendido para chegar ao PDF do boleto a partir de um link.
+ * Uma receita vale para um host + padrão de caminho (ex.: gerencianet.com.br /emissao/{id}).
+ * steps é uma lista declarativa de passos (ver src/lib/links/recipe.ts) — nunca código.
+ */
+export const linkRecipes = pgTable(
+  "link_recipes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    host: text("host").notNull(),
+    pathPattern: text("path_pattern").notNull(),
+    steps: jsonb("steps").notNull(),
+    exampleUrl: text("example_url"),
+    active: boolean("active").notNull().default(true),
+    version: integer("version").notNull().default(1),
+    successCount: integer("success_count").notNull().default(0),
+    failureCount: integer("failure_count").notNull().default(0),
+    lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+    lastFailureAt: timestamp("last_failure_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("link_recipes_host_pattern_uq").on(t.host, t.pathPattern)],
 );
 
 /**
@@ -239,3 +301,5 @@ export type EmailAccount = typeof emailAccounts.$inferSelect;
 export type DocumentRow = typeof documents.$inferSelect;
 export type PayableRow = typeof payables.$inferSelect;
 export type ContaAzulConnectionRow = typeof contaAzulConnection.$inferSelect;
+export type EmailLinkRow = typeof emailLinks.$inferSelect;
+export type LinkRecipeRow = typeof linkRecipes.$inferSelect;

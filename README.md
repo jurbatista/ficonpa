@@ -15,6 +15,33 @@ Leitor de boletos por e-mail que lança contas a pagar no Conta Azul, com triage
 9. PDFs que não são boleto são descartados e não aparecem na tela principal.
 10. Tudo (banco + arquivos em disco) é apagado após **90 dias** contados da entrada no sistema ou do lançamento.
 
+## Boletos que chegam por link
+
+Muitos e-mails não trazem o PDF anexado, só um link (Asaas, Gerencianet/Efí, Iugu…). Para esses:
+
+1. O corpo do e-mail é lido **só em memória** e os links com cara de cobrança são escolhidos
+   (texto "boleto/fatura/2ª via", domínios de cobrança conhecidos, assunto do e-mail).
+2. Se já existe um **caminho aprendido** para aquele site + formato de link, ele é executado sem IA.
+3. Se não existe (ou parou de funcionar), um **agente com navegador headless + LLM** abre o link e vai
+   clicando até baixar o PDF do boleto. Cada clique é gravado como um passo declarativo (nunca código).
+4. O caminho gravado é **repetido do zero, sem a LLM**, para validar. Quando a URL do PDF pode ser
+   montada a partir do link (ex.: `asaas.com/i/{id}` → `asaas.com/b/pdf/{id}`), vira um download
+   direto, sem navegador. Só depois de validado ele é salvo.
+5. Se a validação falhar, o agente tenta de novo com o erro como contexto (padrão: 3 tentativas).
+   **Captcha, link expirado e site fora do ar interrompem na hora**; fora do ar é re-tentado mais tarde.
+6. O PDF obtido entra no mesmo fluxo dos anexos (triagem, fornecedor, lançamento).
+
+Tela **Conexões → Links de boleto**: testar um link na hora, ver/desativar/esquecer caminhos aprendidos e
+acompanhar os passos de cada link. Pela linha de comando:
+
+```bash
+npm run link:learn -- "https://www.asaas.com/i/abc123" --out boleto.pdf
+```
+
+Segurança: só `https`, bloqueio de IPs internos/loopback/metadados (SSRF) em toda requisição do navegador,
+limite de tamanho e tempo, e o conteúdo das páginas é tratado como dado não confiável pelo agente.
+Localmente é preciso `npx playwright install chromium`; no Docker a imagem já inclui o Chromium.
+
 ## Stack
 
 - Next.js 16 (App Router) + React 19 + Tailwind 4, com o tema free **NextAdmin**.

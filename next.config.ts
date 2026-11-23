@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
     "ioredis",
     "postgres",
     "pino",
+    "playwright",
+    "playwright-core",
   ],
 };
 

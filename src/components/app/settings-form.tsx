@@ -123,6 +123,63 @@ export function SettingsForm({ initial }: { initial: AppSettings }) {
       </Section>
 
       <Section
+        title="Boletos por link"
+        description="E-mails sem PDF anexado: um agente abre o link, encontra o boleto e aprende o caminho para as próximas vezes."
+      >
+        <div className="space-y-5">
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-card-border px-4 py-3">
+            <div>
+              <p className="text-sm font-medium text-text-primary">Buscar boletos em links</p>
+              <p className="text-xs text-text-secondary">
+                O corpo do e-mail é lido só em memória; apenas a URL usada fica registrada.
+              </p>
+            </div>
+            <Toggle
+              checked={form.linkResolverEnabled}
+              onChange={(event) =>
+                setForm((previous) => ({ ...previous, linkResolverEnabled: event.target.checked }))
+              }
+              aria-label="Buscar boletos em links"
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block text-sm">
+              <span className="mb-1.5 block font-medium text-text-primary">Modelo do agente (OpenRouter)</span>
+              <input
+                className={fieldClass}
+                value={form.linkAgentModel}
+                onChange={(event) =>
+                  setForm((previous) => ({ ...previous, linkAgentModel: event.target.value }))
+                }
+              />
+              <span className="mt-1 block text-xs text-text-tertiary">
+                Precisa suportar ferramentas (tool calling) e, de preferência, imagens.
+              </span>
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1.5 block font-medium text-text-primary">Tentativas de aprendizado</span>
+              <input
+                type="number"
+                min={1}
+                max={6}
+                className={fieldClass}
+                value={form.linkLearningAttempts}
+                onChange={(event) =>
+                  setForm((previous) => ({
+                    ...previous,
+                    linkLearningAttempts: Number(event.target.value),
+                  }))
+                }
+              />
+              <span className="mt-1 block text-xs text-text-tertiary">
+                Quantas vezes refazer quando o caminho não se confirma. Captcha e site fora do ar param na hora.
+              </span>
+            </label>
+          </div>
+        </div>
+      </Section>
+
+      <Section
         title="Retenção de dados"
         description="Conta a partir da entrada no sistema ou do lançamento, o que ocorrer por último."
       >
