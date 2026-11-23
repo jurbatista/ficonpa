@@ -272,6 +272,7 @@ export async function processAttachment(
       supplierDocument: supplier.document,
       value,
       dueDate,
+      documentId,
     })) {
       await db
         .update(documents)

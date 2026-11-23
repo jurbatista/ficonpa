@@ -7,6 +7,7 @@ export const QUEUE_NAMES = {
   postPayable: "post-payable",
   purge: "purge-old",
   resolveLink: "resolve-link",
+  catalogSync: "catalog-sync",
 } as const;
 
 /**

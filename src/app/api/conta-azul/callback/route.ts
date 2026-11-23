@@ -37,7 +37,8 @@ export async function GET(request: Request) {
     const connection = await saveConnection(tokens);
     let warning: string | undefined;
     try {
-      await syncContaAzulCatalogs();
+      const synced = await syncContaAzulCatalogs();
+      if (synced.warnings.length > 0) warning = synced.warnings.join(" ");
     } catch (syncError) {
       warning = syncError instanceof Error ? syncError.message : String(syncError);
     }

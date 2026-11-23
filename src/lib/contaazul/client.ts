@@ -50,20 +50,45 @@ export function asArray<T = Record<string, unknown>>(payload: unknown): T[] {
   return [];
 }
 
-export async function fetchAllPages<T = Record<string, unknown>>(
-  path: string,
-  pageSize = 100,
-  maxPages = 50,
-): Promise<T[]> {
+/** Total informado pela API (o nome do campo muda entre os módulos). */
+function totalOf(payload: unknown): number | null {
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as Record<string, unknown>;
+  for (const key of ["totalItems", "itens_totais", "total_itens", "total"]) {
+    if (typeof record[key] === "number") return record[key] as number;
+  }
+  return null;
+}
+
+async function fetchPages<T>(path: string, pageSize: number, maxPages: number): Promise<T[]> {
   const results: T[] = [];
+  const separator = path.includes("?") ? "&" : "?";
   for (let page = 1; page <= maxPages; page += 1) {
-    const separator = path.includes("?") ? "&" : "?";
     const payload = await caJson<unknown>(
       `${path}${separator}pagina=${page}&tamanho_pagina=${pageSize}`,
     );
     const items = asArray<T>(payload);
+    if (items.length === 0) break;
     results.push(...items);
-    if (items.length < pageSize) break;
+    // Para pelo total informado; sem ele, para quando a página vier incompleta.
+    const total = totalOf(payload);
+    if (total !== null ? results.length >= total : items.length < pageSize) break;
   }
   return results;
+}
+
+export async function fetchAllPages<T = Record<string, unknown>>(
+  path: string,
+  pageSize = 100,
+  maxPages = 200,
+): Promise<T[]> {
+  try {
+    return await fetchPages<T>(path, pageSize, maxPages);
+  } catch (error) {
+    // Alguns módulos limitam o tamanho da página: tenta de novo com páginas menores.
+    if (error instanceof ContaAzulError && error.status === 400 && pageSize > 20) {
+      return fetchPages<T>(path, 20, maxPages * 5);
+    }
+    throw error;
+  }
 }

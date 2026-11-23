@@ -19,6 +19,7 @@ import { postPayable } from "@/lib/payables/post";
 import { getSettings } from "@/lib/settings";
 import { logAudit } from "@/lib/audit";
 import { resolveEmailLink } from "@/lib/links/jobs";
+import { syncCatalogsIfConnected } from "@/lib/contaazul/sync";
 import { closeSharedBrowser } from "@/lib/links/resolve";
 
 function log(message: string, extra?: unknown) {
@@ -124,6 +125,13 @@ async function main() {
     async (job) => {
       const { attachmentId, force } = job.data as { attachmentId: string; force?: boolean };
       log("processando anexo", { attachmentId, force: Boolean(force) });
+      // "Tentar de novo" costuma vir depois de um cadastro novo no Conta Azul:
+      // atualiza os cadastros antes para o fornecedor recém-criado ser encontrado.
+      if (force) {
+        await syncCatalogsIfConnected(2 * 60_000).catch((error: unknown) =>
+          log("falha ao atualizar cadastros", { error: error instanceof Error ? error.message : String(error) }),
+        );
+      }
       const result = await processAttachment(attachmentId, { force });
       log("anexo processado", result);
       return result;
@@ -166,7 +174,18 @@ async function main() {
     { connection: redisConnection(), concurrency: 1, lockDuration: 10 * 60_000 },
   );
 
-  for (const worker of [mailWorker, documentWorker, postWorker, purgeWorker, linkWorker]) {
+  // Mantém fornecedores, categorias e contas do Conta Azul em dia sem ninguém pedir.
+  const catalogWorker = new Worker(
+    QUEUE_NAMES.catalogSync,
+    async () => {
+      const result = await syncCatalogsIfConnected();
+      if (result) log("cadastros do Conta Azul atualizados", result);
+      return result;
+    },
+    { connection: redisConnection(), concurrency: 1 },
+  );
+
+  for (const worker of [mailWorker, documentWorker, postWorker, purgeWorker, linkWorker, catalogWorker]) {
     worker.on("failed", (job, error) => {
       log(`job falhou ${job?.queueName}/${job?.name}`, { error: error.message });
     });
@@ -176,12 +195,17 @@ async function main() {
   await getQueue(QUEUE_NAMES.mailSync).add(
     QUEUE_NAMES.mailSync,
     {},
-    { repeat: { pattern: "*/15 * * * *" }, jobId: "mail-sync-cron" },
+    { repeat: { pattern: "*/15 * * * *" }, jobId: "mail-sync-cron", removeOnComplete: 50, removeOnFail: 50 },
+  );
+  await getQueue(QUEUE_NAMES.catalogSync).add(
+    QUEUE_NAMES.catalogSync,
+    {},
+    { repeat: { pattern: "20 * * * *" }, jobId: "catalog-sync-cron", removeOnComplete: 50, removeOnFail: 50 },
   );
   await getQueue(QUEUE_NAMES.purge).add(
     QUEUE_NAMES.purge,
     {},
-    { repeat: { pattern: "0 * * * *" }, jobId: "purge-cron" },
+    { repeat: { pattern: "0 * * * *" }, jobId: "purge-cron", removeOnComplete: 50, removeOnFail: 50 },
   );
 
   // Sinal de vida no volume compartilhado: o /api/health do web confere que o worker
