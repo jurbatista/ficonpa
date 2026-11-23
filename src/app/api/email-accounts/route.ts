@@ -1,19 +1,23 @@
+import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { emailAccounts } from "@/db/schema";
 import { encryptSecret } from "@/lib/crypto";
 import { testImapConnection } from "@/lib/mail/imap";
+import { discoverMailProvider, isValidEmail } from "@/lib/mail/providers";
+import { enqueue, QUEUE_NAMES } from "@/lib/queue";
 import { errorMessage, fail, ok, readJson } from "@/lib/api";
 import { listEmailAccounts } from "@/lib/queries";
 import { logAudit } from "@/lib/audit";
 
 type Body = {
-  label?: string;
   email?: string;
+  password?: string;
+  // Opcionais (modo avançado): se ausentes, são descobertos pelo e-mail.
+  label?: string;
   host?: string;
   port?: number;
   secure?: boolean;
   username?: string;
-  password?: string;
   folder?: string;
   lookbackDays?: number;
 };
@@ -21,39 +25,74 @@ type Body = {
 export async function GET() {
   const rows = await listEmailAccounts();
   return ok(
-    rows.map(({ passwordEnc: _passwordEnc, ...rest }) => rest),
+    rows.map((row) => ({
+      ...row,
+      passwordEnc: undefined,
+      oauthAccessEnc: undefined,
+      oauthRefreshEnc: undefined,
+    })),
   );
+}
+
+/** Erros em que vale tentar o próximo servidor (o servidor está errado, não a senha). */
+function isHostProblem(message: string): boolean {
+  return /não encontrado|recusou a conexão|Tempo esgotado|SSL\/TLS/i.test(message);
 }
 
 export async function POST(request: Request) {
   try {
     const body = await readJson<Body>(request);
-    const missing = ["label", "email", "host", "username", "password"].filter(
-      (field) => !body[field as keyof Body],
-    );
-    if (missing.length) return fail(`Campos obrigatórios: ${missing.join(", ")}.`);
+    const email = (body.email ?? "").trim().toLowerCase();
+    const password = (body.password ?? "").replace(/\s+$/g, "");
+    if (!isValidEmail(email)) return fail("Informe um e-mail válido.");
+    if (!password) return fail("Informe a senha.");
 
-    const account = {
-      host: body.host!,
-      port: Number(body.port ?? 993),
-      secure: body.secure ?? true,
-      username: body.username!,
-      passwordEnc: encryptSecret(body.password!),
-    };
+    const [existing] = await getDb()
+      .select({ id: emailAccounts.id })
+      .from(emailAccounts)
+      .where(eq(emailAccounts.email, email))
+      .limit(1);
+    if (existing) return fail("Esta caixa já está conectada.");
 
-    await testImapConnection(account);
+    const discovery = await discoverMailProvider(email);
+    const manualHost = body.host?.trim();
+    const hosts = manualHost ? [manualHost] : [discovery.provider.host, ...discovery.alternatives];
+    const port = Number(body.port ?? discovery.provider.port);
+    const secure = body.secure ?? (port === 993 ? true : port === 143 ? false : discovery.provider.secure);
+    const username = body.username?.trim() || email;
+    // Senhas de app do Google são mostradas em blocos ("abcd efgh ijkl mnop").
+    const cleanPassword = discovery.provider.id === "gmail" ? password.replace(/\s/g, "") : password;
+    const passwordEnc = encryptSecret(cleanPassword);
+
+    let host = hosts[0];
+    let lastError = "";
+    let connected = false;
+    for (const candidate of hosts) {
+      try {
+        await testImapConnection({ host: candidate, port, secure, username, passwordEnc });
+        host = candidate;
+        connected = true;
+        break;
+      } catch (error) {
+        lastError = errorMessage(error);
+        if (!isHostProblem(lastError)) break;
+      }
+    }
+    if (!connected) return fail(lastError || "Não foi possível conectar.");
 
     const [created] = await getDb()
       .insert(emailAccounts)
       .values({
-        label: body.label!,
-        email: body.email!,
-        host: account.host,
-        port: account.port,
-        secure: account.secure,
-        username: account.username,
-        passwordEnc: account.passwordEnc,
-        folder: body.folder || "INBOX",
+        label: body.label?.trim() || email,
+        email,
+        host,
+        port,
+        secure,
+        username,
+        passwordEnc,
+        authType: "password",
+        provider: discovery.provider.id,
+        folder: body.folder?.trim() || "INBOX",
         lookbackDays: Number(body.lookbackDays ?? 30),
       })
       .returning({ id: emailAccounts.id });
@@ -61,10 +100,12 @@ export async function POST(request: Request) {
     await logAudit("email_account_created", {
       entity: "email_account",
       entityId: created.id,
-      payload: { email: body.email },
+      payload: { email, provider: discovery.provider.id },
     });
+    // Já começa a buscar os boletos, sem precisar clicar em nada.
+    await enqueue(QUEUE_NAMES.mailSync, { accountId: created.id }).catch(() => undefined);
 
-    return ok({ id: created.id }, { status: 201 });
+    return ok({ id: created.id, provider: discovery.provider.name }, { status: 201 });
   } catch (error) {
     return fail(errorMessage(error));
   }

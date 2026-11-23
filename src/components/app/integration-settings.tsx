@@ -12,6 +12,9 @@ export type IntegrationSettingsData = {
   contaAzulClientId: string | null;
   contaAzulClientSecret: string | null;
   contaAzulRedirectUri: string;
+  microsoftClientId: string | null;
+  microsoftClientSecret: string | null;
+  microsoftRedirectUri: string;
   status: {
     openrouterApiKey: Source;
     contaAzulClientId: Source;
@@ -40,6 +43,8 @@ export function IntegrationSettings({ data }: { data: IntegrationSettingsData })
   const [clientSecret, setClientSecret] = useState("");
   const [clearClientSecret, setClearClientSecret] = useState(false);
   const [redirectUri, setRedirectUri] = useState(data.contaAzulRedirectUri);
+  const [msClientId, setMsClientId] = useState(data.microsoftClientId ?? "");
+  const [msClientSecret, setMsClientSecret] = useState("");
   const [busy, setBusy] = useState(false);
 
   const save = async (event: React.FormEvent) => {
@@ -60,6 +65,11 @@ export function IntegrationSettings({ data }: { data: IntegrationSettingsData })
       payload.contaAzulRedirectUri = redirectUri.trim();
     }
 
+    if (msClientId.trim() !== (data.microsoftClientId ?? "")) {
+      payload.microsoftClientId = msClientId.trim();
+    }
+    if (msClientSecret.trim()) payload.microsoftClientSecret = msClientSecret.trim();
+
     if (Object.keys(payload).length === 0) {
       toast.info("Nenhuma alteração para salvar.");
       return;
@@ -79,6 +89,7 @@ export function IntegrationSettings({ data }: { data: IntegrationSettingsData })
       setClearOpenrouterApiKey(false);
       setClientSecret("");
       setClearClientSecret(false);
+      setMsClientSecret("");
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao salvar.");
@@ -195,6 +206,70 @@ export function IntegrationSettings({ data }: { data: IntegrationSettingsData })
           </label>
         </div>
       </Section>
+
+      <div id="microsoft" className="scroll-mt-24">
+        <Section
+          title="Login da Microsoft (Outlook, Hotmail, Microsoft 365)"
+          description="Necessário só para conectar caixas da Microsoft. Gmail e os demais não precisam disso."
+        >
+          <div className="space-y-4">
+            <ol className="list-decimal space-y-1 pl-5 text-sm text-text-secondary">
+              <li>
+                Em{" "}
+                <a
+                  className="underline"
+                  href="https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  portal.azure.com → Registros de aplicativo
+                </a>
+                , clique em “Novo registro”. Em tipos de conta, escolha “qualquer diretório e contas
+                pessoais”.
+              </li>
+              <li>
+                Em URI de redirecionamento, escolha “Web” e cole:{" "}
+                <code className="rounded bg-gray-100 px-1 py-0.5 text-xs break-all dark:bg-white/10">
+                  {data.microsoftRedirectUri}
+                </code>
+              </li>
+              <li>
+                Em “Permissões de API”, adicione a permissão delegada{" "}
+                <code className="text-xs">IMAP.AccessAsUser.All</code> (Office 365 Exchange Online) e{" "}
+                <code className="text-xs">offline_access</code>.
+              </li>
+              <li>Em “Certificados e segredos”, crie um segredo e cole abaixo junto com o ID do aplicativo.</li>
+            </ol>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm">
+                <span className="mb-1.5 block font-medium text-text-primary">
+                  ID do aplicativo (cliente)
+                </span>
+                <input
+                  className={fieldClass}
+                  value={msClientId}
+                  onChange={(event) => setMsClientId(event.target.value)}
+                  placeholder="00000000-0000-0000-0000-000000000000"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1.5 block font-medium text-text-primary">Segredo do cliente (valor)</span>
+                <input
+                  type="password"
+                  autoComplete="off"
+                  className={fieldClass}
+                  value={msClientSecret}
+                  onChange={(event) => setMsClientSecret(event.target.value)}
+                  placeholder={data.microsoftClientSecret ?? "Valor do segredo"}
+                />
+                <span className="mt-1 block text-xs text-text-tertiary">
+                  {data.microsoftClientSecret ? "Configurado. Deixe em branco para manter." : "Não configurado."}
+                </span>
+              </label>
+            </div>
+          </div>
+        </Section>
+      </div>
 
       <div className="flex justify-end">
         <button

@@ -17,6 +17,7 @@ export async function POST(
       .limit(1);
     if (!account) return fail("Conta não encontrada.", 404);
     await testImapConnection(account);
+    await getDb().update(emailAccounts).set({ lastError: null }).where(eq(emailAccounts.id, id));
     return ok({ connected: true });
   } catch (error) {
     return fail(errorMessage(error));

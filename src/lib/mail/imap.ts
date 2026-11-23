@@ -1,21 +1,33 @@
 import { ImapFlow } from "imapflow";
 import type { EmailAccount } from "@/db/schema";
 import { decryptSecret } from "@/lib/crypto";
+import { microsoftAccessToken } from "./microsoft";
 
 export type ImapAccountInput = Pick<
   EmailAccount,
   "host" | "port" | "secure" | "username" | "passwordEnc"
->;
+> &
+  Partial<Pick<EmailAccount, "id" | "authType" | "oauthAccessEnc" | "oauthRefreshEnc" | "oauthExpiresAt">>;
 
-export function createImapClient(account: ImapAccountInput): ImapFlow {
+export async function createImapClient(account: ImapAccountInput): Promise<ImapFlow> {
+  const auth =
+    account.authType === "microsoft"
+      ? {
+          user: account.username,
+          accessToken: await microsoftAccessToken({
+            id: account.id,
+            oauthAccessEnc: account.oauthAccessEnc ?? null,
+            oauthRefreshEnc: account.oauthRefreshEnc ?? null,
+            oauthExpiresAt: account.oauthExpiresAt ?? null,
+          }),
+        }
+      : { user: account.username, pass: decryptSecret(account.passwordEnc) };
+
   return new ImapFlow({
     host: account.host,
     port: account.port,
     secure: account.secure,
-    auth: {
-      user: account.username,
-      pass: decryptSecret(account.passwordEnc),
-    },
+    auth,
     logger: false,
     emitLogs: false,
     connectionTimeout: 20_000,
@@ -46,7 +58,7 @@ export function describeImapError(error: unknown, host?: string): string {
   const isGoogle = /gmail|google/i.test(host ?? "");
 
   if (/login is disabled|basicauthblocked|basic auth/i.test(text) || (isMicrosoft && /disabled/i.test(text))) {
-    return `A Microsoft (Outlook/Office 365) bloqueou o login IMAP por senha nesta conta${detail}. É preciso habilitar IMAP/autenticação básica no Microsoft 365 ou usar outro provedor; senha de aplicativo só funciona se o administrador permitir.`;
+    return `A Microsoft não aceita login por senha nesta conta${detail}. Use o botão “Entrar com a Microsoft”.`;
   }
   if (err.authenticationFailed || /AUTHENTICATIONFAILED|invalid credentials|authentication failed|login failed|LOGIN.*(fail|invalid)|incorrect/i.test(text)) {
     if (isGoogle) {
@@ -64,9 +76,10 @@ export function describeImapError(error: unknown, host?: string): string {
 }
 
 export async function testImapConnection(account: ImapAccountInput): Promise<void> {
-  const client = createImapClient(account);
-  client.on("error", () => undefined);
+  let client: ImapFlow | null = null;
   try {
+    client = await createImapClient(account);
+    client.on("error", () => undefined);
     await client.connect();
     await client.noop();
   } catch (error) {
@@ -77,7 +90,7 @@ export async function testImapConnection(account: ImapAccountInput): Promise<voi
     );
     throw new Error(message);
   } finally {
-    await client.logout().catch(() => undefined);
+    await client?.logout().catch(() => undefined);
   }
 }
 

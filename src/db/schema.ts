@@ -25,6 +25,12 @@ export const emailAccounts = pgTable(
     secure: boolean("secure").notNull().default(true),
     username: text("username").notNull(),
     passwordEnc: text("password_enc").notNull(),
+    /** "password" (senha/senha de app) ou "microsoft" (OAuth2 / XOAUTH2). */
+    authType: text("auth_type").notNull().default("password"),
+    provider: text("provider"),
+    oauthRefreshEnc: text("oauth_refresh_enc"),
+    oauthAccessEnc: text("oauth_access_enc"),
+    oauthExpiresAt: timestamp("oauth_expires_at", { withTimezone: true }),
     folder: text("folder").notNull().default("INBOX"),
     lookbackDays: integer("lookback_days").notNull().default(30),
     uidValidity: text("uid_validity"),

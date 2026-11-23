@@ -7,6 +7,7 @@ import {
 } from "@/lib/config";
 import { errorMessage, fail, ok, readJson } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
+import { microsoftRedirectUri } from "@/lib/mail/microsoft";
 
 const schema = z.object({
   openrouterApiKey: z.string().max(1024).optional(),
@@ -15,6 +16,8 @@ const schema = z.object({
   contaAzulRedirectUri: z
     .union([z.literal(""), z.string().url().max(2048)])
     .optional(),
+  microsoftClientId: z.string().max(1024).optional(),
+  microsoftClientSecret: z.string().max(1024).optional(),
 });
 
 async function view() {
@@ -28,6 +31,9 @@ async function view() {
     contaAzulClientId: config.contaAzulClientId,
     contaAzulClientSecret: maskSecret(config.contaAzulClientSecret),
     contaAzulRedirectUri: config.contaAzulRedirectUri,
+    microsoftClientId: config.microsoftClientId,
+    microsoftClientSecret: maskSecret(config.microsoftClientSecret),
+    microsoftRedirectUri: microsoftRedirectUri(),
     status,
   };
 }

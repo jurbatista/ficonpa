@@ -31,14 +31,16 @@ export async function syncEmailAccount(account: EmailAccount): Promise<SyncAccou
     skipped: 0,
   };
   const db = getDb();
-  const client = createImapClient(account);
-  client.on("error", () => undefined);
   const { linkResolverEnabled: scanLinks } = await getSettings();
   const knownHosts = scanLinks
     ? (await db.selectDistinct({ host: linkRecipes.host }).from(linkRecipes)).map((row) => row.host)
     : [];
 
+  let client: Awaited<ReturnType<typeof createImapClient>> | null = null;
+
   try {
+    client = await createImapClient(account);
+    client.on("error", () => undefined);
     await client.connect();
     const mailbox = await client.mailboxOpen(account.folder);
     const uidValidity = String(mailbox.uidValidity ?? "");
@@ -201,6 +203,6 @@ export async function syncEmailAccount(account: EmailAccount): Promise<SyncAccou
       .where(eq(emailAccounts.id, account.id));
     return result;
   } finally {
-    await client.logout().catch(() => undefined);
+    await client?.logout().catch(() => undefined);
   }
 }

@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/app/ui";
 import { SettingsForm } from "@/components/app/settings-form";
 import { IntegrationSettings } from "@/components/app/integration-settings";
+import { microsoftRedirectUri } from "@/lib/mail/microsoft";
 import { PasswordForm } from "@/components/app/password-form";
 import { getSettings } from "@/lib/settings";
 import {
@@ -33,6 +34,9 @@ export default async function SettingsPage() {
             contaAzulClientId: integration.contaAzulClientId,
             contaAzulClientSecret: maskSecret(integration.contaAzulClientSecret),
             contaAzulRedirectUri: integration.contaAzulRedirectUri,
+            microsoftClientId: integration.microsoftClientId,
+            microsoftClientSecret: maskSecret(integration.microsoftClientSecret),
+            microsoftRedirectUri: microsoftRedirectUri(),
             status: integrationStatus,
           }}
         />

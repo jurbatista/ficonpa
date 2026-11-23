@@ -10,6 +10,8 @@ const KEYS = {
   contaAzulClientSecret: "conta_azul_client_secret",
   contaAzulRedirectUri: "conta_azul_redirect_uri",
   appPasswordHash: "app_password_hash",
+  microsoftClientId: "microsoft_client_id",
+  microsoftClientSecret: "microsoft_client_secret",
 } as const;
 
 async function readSetting(key: string): Promise<unknown | null> {
@@ -57,17 +59,25 @@ export type IntegrationConfig = {
   contaAzulClientId: string | null;
   contaAzulClientSecret: string | null;
   contaAzulRedirectUri: string;
+  microsoftClientId: string | null;
+  microsoftClientSecret: string | null;
 };
 
 export async function getIntegrationConfig(): Promise<IntegrationConfig> {
-  const [apiKeyRaw, clientIdRaw, clientSecretRaw, redirectRaw] = await Promise.all([
-    readSetting(KEYS.openrouterApiKey),
-    readSetting(KEYS.contaAzulClientId),
-    readSetting(KEYS.contaAzulClientSecret),
-    readSetting(KEYS.contaAzulRedirectUri),
-  ]);
+  const [apiKeyRaw, clientIdRaw, clientSecretRaw, redirectRaw, msIdRaw, msSecretRaw] =
+    await Promise.all([
+      readSetting(KEYS.openrouterApiKey),
+      readSetting(KEYS.contaAzulClientId),
+      readSetting(KEYS.contaAzulClientSecret),
+      readSetting(KEYS.contaAzulRedirectUri),
+      readSetting(KEYS.microsoftClientId),
+      readSetting(KEYS.microsoftClientSecret),
+    ]);
 
   return {
+    microsoftClientId: plain(msIdRaw) ?? optionalEnv("MICROSOFT_CLIENT_ID") ?? null,
+    microsoftClientSecret:
+      safeDecrypt(msSecretRaw) ?? optionalEnv("MICROSOFT_CLIENT_SECRET") ?? null,
     openrouterApiKey: safeDecrypt(apiKeyRaw) ?? optionalEnv("OPENROUTER_API_KEY") ?? null,
     contaAzulClientId: plain(clientIdRaw) ?? optionalEnv("CONTA_AZUL_CLIENT_ID") ?? null,
     contaAzulClientSecret:
@@ -132,6 +142,8 @@ export type IntegrationInput = {
   contaAzulClientId?: string;
   contaAzulClientSecret?: string;
   contaAzulRedirectUri?: string;
+  microsoftClientId?: string;
+  microsoftClientSecret?: string;
 };
 
 export async function saveIntegrationConfig(
@@ -160,6 +172,19 @@ export async function saveIntegrationConfig(
       await clearSetting(KEYS.contaAzulRedirectUri);
     } else {
       await writeSetting(KEYS.contaAzulRedirectUri, input.contaAzulRedirectUri.trim());
+    }
+  }
+  if (input.microsoftClientId !== undefined) {
+    if (input.microsoftClientId.trim() === "") await clearSetting(KEYS.microsoftClientId);
+    else await writeSetting(KEYS.microsoftClientId, input.microsoftClientId.trim());
+  }
+  if (input.microsoftClientSecret !== undefined) {
+    if (input.microsoftClientSecret.trim() === "") await clearSetting(KEYS.microsoftClientSecret);
+    else {
+      await writeSetting(
+        KEYS.microsoftClientSecret,
+        encryptSecret(input.microsoftClientSecret.trim()),
+      );
     }
   }
   return getIntegrationConfig();
