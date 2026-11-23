@@ -49,7 +49,7 @@ export function PasswordForm() {
     <form onSubmit={submit}>
       <Section
         title="Senha de acesso"
-        description="Senha única usada para entrar no ficonpa. Fica armazenada como hash scrypt."
+        description="Senha usada para entrar no sistema."
       >
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-3">

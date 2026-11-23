@@ -36,7 +36,7 @@ export type QwenInput = {
 export async function extractWithQwen(input: QwenInput): Promise<QwenExtraction> {
   const apiKey = await getOpenRouterApiKey();
   if (!apiKey) {
-    throw new Error("Chave da OpenRouter não configurada. Defina em Configurações.");
+    throw new Error("Serviço de leitura não configurado. Fale com o suporte.");
   }
 
   const content: ContentPart[] = [];
@@ -55,7 +55,7 @@ export async function extractWithQwen(input: QwenInput): Promise<QwenExtraction>
     });
     content.push({ type: "text", text: QWEN_PDF_PROMPT });
   } else {
-    throw new Error("Sem texto nem PDF para enviar ao Qwen.");
+    throw new Error("Documento sem texto nem PDF para leitura.");
   }
 
   const body: Record<string, unknown> = {
@@ -92,14 +92,14 @@ export async function extractWithQwen(input: QwenInput): Promise<QwenExtraction>
 
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`Qwen/OpenRouter ${response.status}: ${text.slice(0, 500)}`);
+    throw new Error(`Serviço de leitura indisponível (${response.status}): ${text.slice(0, 500)}`);
   }
 
   const payload = JSON.parse(text) as {
     choices?: { message?: { content?: string } }[];
   };
   const raw = payload.choices?.[0]?.message?.content;
-  if (!raw) throw new Error("Qwen não retornou conteúdo.");
+  if (!raw) throw new Error("A leitura do documento não retornou conteúdo.");
 
   const parsed = JSON.parse(raw) as QwenExtraction;
   return {

@@ -42,8 +42,6 @@ export default async function PayableDetailPage({
     confidence: row.document.confidence,
     needsAttention: row.document.needsAttention,
     attentionReason: row.document.attentionReason,
-    jev: row.document.jev,
-    extraction: row.document.extraction,
     emailSubject: row.message.subject,
     emailFrom: row.message.fromAddress,
     emailReceivedAt: row.message.receivedAt ? row.message.receivedAt.toISOString() : null,

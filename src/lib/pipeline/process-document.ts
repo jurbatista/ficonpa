@@ -128,7 +128,7 @@ export async function processAttachment(
         qwenError = error instanceof Error ? error.message : String(error);
       }
     } else {
-      qwenError = "Chave da OpenRouter ausente: usando apenas o parser determinístico.";
+      qwenError = "Serviço de leitura não configurado: usando apenas a leitura direta do PDF.";
     }
 
     const linhaDigitavel = textData.linhaDigitavel ?? qwen?.linha_digitavel ?? null;

@@ -147,7 +147,7 @@ async function askModel(input: {
     signal: AbortSignal.timeout(90_000),
   });
   const raw = await response.text();
-  if (!response.ok) throw new Error(`Agente/OpenRouter ${response.status}: ${raw.slice(0, 300)}`);
+  if (!response.ok) throw new Error(`Serviço de leitura indisponível (${response.status}): ${raw.slice(0, 300)}`);
 
   const payload = JSON.parse(raw) as {
     choices?: { message?: { content?: string; tool_calls?: { function?: { name?: string; arguments?: string } }[] } }[];
@@ -166,7 +166,7 @@ async function askModel(input: {
   // Alguns modelos respondem em texto: tenta achar "clicar ... ref N".
   const fallback = message?.content?.match(/\bref\D{0,5}(\d+)/i);
   if (fallback) return { name: "clicar", args: { ref: Number(fallback[1]) } };
-  throw new Error("O modelo não escolheu nenhuma ação.");
+  throw new Error("Nenhuma ação possível nesta página.");
 }
 
 /** Confere se o PDF parece um boleto (e não nota fiscal, contrato etc.). */
@@ -194,7 +194,7 @@ export async function learnPath(input: {
   onLog?: (line: string) => void;
 }): Promise<LearnResult> {
   const apiKey = await getOpenRouterApiKey();
-  if (!apiKey) throw new Error("Chave da OpenRouter não configurada.");
+  if (!apiKey) throw new Error("Serviço de leitura não configurado. Fale com o suporte.");
 
   const maxActions = input.maxActions ?? 12;
   const feedback = [...(input.feedback ?? [])];
@@ -239,10 +239,10 @@ export async function learnPath(input: {
       if (action.name === "desistir") {
         const motivo = String(action.args.motivo ?? "outro");
         const detalhe = String(action.args.detalhe ?? "");
-        log.push(`agente desistiu: ${motivo} ${detalhe}`);
+        log.push(`busca interrompida: ${motivo} ${detalhe}`);
         if (motivo === "captcha") throw new CaptchaError(`Captcha: ${detalhe}`);
         if (motivo === "sem_boleto") throw new LinkGoneError(`Sem boleto disponível: ${detalhe}`);
-        throw new NeedsHumanError(`${motivo === "precisa_dados" ? "A página pede dados/login" : "Agente não encontrou o boleto"}: ${detalhe}`);
+        throw new NeedsHumanError(`${motivo === "precisa_dados" ? "A página pede dados/login" : "Boleto não encontrado na página"}: ${detalhe}`);
       }
 
       if (action.name === "esperar") {
@@ -283,7 +283,7 @@ export async function learnPath(input: {
       }
     }
 
-    throw new NeedsHumanError(`Agente não encontrou o boleto em ${maxActions} ações.`);
+    throw new NeedsHumanError(`Boleto não encontrado em ${maxActions} ações.`);
   } finally {
     await session.close();
   }

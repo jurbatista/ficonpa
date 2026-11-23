@@ -9,9 +9,9 @@ import type { EmailLinkView, LinkRecipeView } from "@/lib/links/queries";
 
 const METHOD_LABEL: Record<string, string> = {
   direct: "Link direto para o PDF",
-  recipe: "Caminho já aprendido",
-  learned: "Aprendido agora",
-  relearned: "Reaprendido (o site mudou)",
+  recipe: "Caminho já salvo",
+  learned: "Caminho novo salvo",
+  relearned: "Caminho atualizado (o site mudou)",
 };
 
 const smallButton =
@@ -61,7 +61,7 @@ export function LinksManager({ recipes, links }: { recipes: LinkRecipeView[]; li
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url }),
         }).then(() => setUrl("")),
-      "Link enviado. O agente está trabalhando — acompanhe abaixo.",
+      "Link enviado. Acompanhe o andamento abaixo.",
     );
   };
 
@@ -69,7 +69,7 @@ export function LinksManager({ recipes, links }: { recipes: LinkRecipeView[]; li
     <div className="space-y-5">
       <Section
         title="Testar um link"
-        description="Cole o link de um boleto (ex.: Gerencianet/Efí, Asaas, Iugu). O agente aprende o caminho e salva para as próximas vezes. Não gera conta a pagar."
+        description="Cole o link de um boleto (ex.: Gerencianet/Efí, Asaas, Iugu). O sistema busca o boleto e guarda o caminho para as próximas vezes. Não gera conta a pagar."
       >
         <form onSubmit={test} className="flex flex-col gap-3 sm:flex-row">
           <input
@@ -84,18 +84,18 @@ export function LinksManager({ recipes, links }: { recipes: LinkRecipeView[]; li
             disabled={busy !== null || !url.startsWith("https://")}
             className="shrink-0 rounded-lg bg-button-primary-background px-5 py-2.5 text-sm font-medium text-button-primary-text transition hover:bg-button-primary-hover-background disabled:opacity-60"
           >
-            {busy === "test" ? "Enviando..." : "Aprender caminho"}
+            {busy === "test" ? "Enviando..." : "Testar link"}
           </button>
         </form>
       </Section>
 
       <Section
-        title="Caminhos aprendidos"
-        description="Um caminho por site + formato de link. “Direto” = baixa o PDF sem abrir navegador nem usar IA."
+        title="Caminhos salvos"
+        description="Um caminho por site + formato de link. “Direto” = o PDF é baixado na hora, sem precisar navegar pelo site."
       >
         {recipes.length === 0 ? (
           <EmptyState
-            title="Nenhum caminho aprendido ainda"
+            title="Nenhum caminho salvo ainda"
             description="Quando chegar um e-mail com link de boleto (ou você testar um acima), o caminho aparece aqui."
           />
         ) : (
@@ -143,7 +143,7 @@ export function LinksManager({ recipes, links }: { recipes: LinkRecipeView[]; li
                     className={smallButton}
                     disabled={busy !== null}
                     onClick={() => {
-                      if (!window.confirm("Esquecer este caminho? O próximo link desse site será reaprendido.")) return;
+                      if (!window.confirm("Esquecer este caminho? No próximo link desse site, o sistema buscará o caminho de novo.")) return;
                       void run(
                         recipe.id,
                         () => call(`/api/link-recipes/${recipe.id}`, { method: "DELETE" }),

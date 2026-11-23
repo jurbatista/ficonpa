@@ -31,6 +31,28 @@ export const DEFAULT_SETTINGS: AppSettings = {
   linkLearningAttempts: 3,
 };
 
+/** O que a tela de configurações enxerga. Os demais ajustes são internos. */
+export type PublicSettings = Pick<
+  AppSettings,
+  | "autoPostEnabled"
+  | "autoPostThreshold"
+  | "reviewThreshold"
+  | "retentionDays"
+  | "linkResolverEnabled"
+  | "linkLearningAttempts"
+>;
+
+export function toPublicSettings(settings: AppSettings): PublicSettings {
+  return {
+    autoPostEnabled: settings.autoPostEnabled,
+    autoPostThreshold: settings.autoPostThreshold,
+    reviewThreshold: settings.reviewThreshold,
+    retentionDays: settings.retentionDays,
+    linkResolverEnabled: settings.linkResolverEnabled,
+    linkLearningAttempts: settings.linkLearningAttempts,
+  };
+}
+
 const KEY_MAP: Record<keyof AppSettings, string> = {
   autoPostEnabled: "auto_post_enabled",
   autoPostThreshold: "auto_post_threshold",

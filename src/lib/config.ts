@@ -96,17 +96,32 @@ export type IntegrationConfigStatus = {
   contaAzulClientId: ConfigSource;
   contaAzulClientSecret: ConfigSource;
   contaAzulRedirectUri: ConfigSource;
+  microsoftClientId: ConfigSource;
+  microsoftClientSecret: ConfigSource;
 };
 
 export async function getIntegrationConfigStatus(): Promise<IntegrationConfigStatus> {
-  const [apiKeyRaw, clientIdRaw, clientSecretRaw, redirectRaw] = await Promise.all([
-    readSetting(KEYS.openrouterApiKey),
-    readSetting(KEYS.contaAzulClientId),
-    readSetting(KEYS.contaAzulClientSecret),
-    readSetting(KEYS.contaAzulRedirectUri),
-  ]);
+  const [apiKeyRaw, clientIdRaw, clientSecretRaw, redirectRaw, msIdRaw, msSecretRaw] =
+    await Promise.all([
+      readSetting(KEYS.openrouterApiKey),
+      readSetting(KEYS.contaAzulClientId),
+      readSetting(KEYS.contaAzulClientSecret),
+      readSetting(KEYS.contaAzulRedirectUri),
+      readSetting(KEYS.microsoftClientId),
+      readSetting(KEYS.microsoftClientSecret),
+    ]);
 
   return {
+    microsoftClientId: plain(msIdRaw)
+      ? "database"
+      : optionalEnv("MICROSOFT_CLIENT_ID")
+        ? "environment"
+        : null,
+    microsoftClientSecret: safeDecrypt(msSecretRaw)
+      ? "database"
+      : optionalEnv("MICROSOFT_CLIENT_SECRET")
+        ? "environment"
+        : null,
     openrouterApiKey: safeDecrypt(apiKeyRaw)
       ? "database"
       : optionalEnv("OPENROUTER_API_KEY")

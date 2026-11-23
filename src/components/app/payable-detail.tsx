@@ -33,8 +33,6 @@ export type PayableDetailData = {
   confidence: string | null;
   needsAttention: boolean;
   attentionReason: string | null;
-  jev: unknown;
-  extraction: unknown;
   emailSubject: string | null;
   emailFrom: string | null;
   emailReceivedAt: string | null;
@@ -357,31 +355,6 @@ export function PayableDetail({
             >
               Reprocessar documento
             </button>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-card-border bg-card-background p-5">
-          <h3 className="text-sm font-semibold text-text-primary">Análise do documento</h3>
-          <p className="mt-0.5 text-xs text-text-secondary">
-            Dados extraídos e classificação do documento.
-          </p>
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <div>
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-tertiary">
-                Análise
-              </p>
-              <pre className="max-h-72 overflow-auto rounded-lg bg-background-gray-primary p-3 text-xs text-text-secondary">
-                {JSON.stringify(data.jev ?? { erro: "Sem análise registrada" }, null, 2)}
-              </pre>
-            </div>
-            <div>
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-tertiary">
-                Extração
-              </p>
-              <pre className="max-h-72 overflow-auto rounded-lg bg-background-gray-primary p-3 text-xs text-text-secondary">
-                {JSON.stringify(data.extraction ?? {}, null, 2)}
-              </pre>
-            </div>
           </div>
         </div>
       </div>

@@ -173,13 +173,13 @@ export async function resolveUrl(
       }
       await markRecipe(recipe.id, false, message(error));
       feedback.push(`O caminho salvo anteriormente (${describeSteps(steps)}) parou de funcionar: ${message(error)}`);
-      log(`receita falhou, reaprendendo: ${message(error)}`);
+      log(`caminho salvo falhou, buscando de novo: ${message(error)}`);
     }
   }
 
   // 3) Aprender → validar → salvar, com novas tentativas.
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    log(`aprendizado: tentativa ${attempt}/${maxAttempts}`);
+    log(`busca: tentativa ${attempt}/${maxAttempts}`);
     let learned;
     try {
       learned = await learnPath({
@@ -203,7 +203,7 @@ export async function resolveUrl(
       try {
         const replay = await runAndCheck(steps, vars);
         if (!(await samePdf(replay.pdf, learned.pdf))) {
-          throw new Error("O caminho repetido baixou um boleto diferente do encontrado pelo agente.");
+          throw new Error("O caminho repetido baixou um boleto diferente do encontrado na primeira busca.");
         }
         const saved = await saveRecipe(finalUrl, steps);
         log(`  validado e salvo como receita v${saved.version} (${saved.host}${saved.pathPattern})`);
@@ -225,7 +225,7 @@ export async function resolveUrl(
   }
 
   throw new ResolveFailedError(
-    `Não foi possível aprender o caminho até o boleto após ${maxAttempts} tentativas. ${feedback.slice(-2).join(" | ")}`,
+    `Não foi possível encontrar o caminho até o boleto após ${maxAttempts} tentativas. ${feedback.slice(-2).join(" | ")}`,
   );
 }
 

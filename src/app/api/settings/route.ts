@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getSettings, updateSettings } from "@/lib/settings";
+import { getSettings, toPublicSettings, updateSettings } from "@/lib/settings";
 import { errorMessage, fail, ok, readJson } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
 
@@ -17,7 +17,7 @@ const schema = z.object({
 });
 
 export async function GET() {
-  return ok(await getSettings());
+  return ok(toPublicSettings(await getSettings()));
 }
 
 export async function PATCH(request: Request) {
@@ -25,16 +25,20 @@ export async function PATCH(request: Request) {
     const body = await readJson<unknown>(request);
     const parsed = schema.safeParse(body);
     if (!parsed.success) return fail("Configurações inválidas.", 422);
-    if (
-      parsed.data.autoPostThreshold !== undefined &&
-      parsed.data.reviewThreshold !== undefined &&
-      parsed.data.autoPostThreshold < parsed.data.reviewThreshold
-    ) {
-      return fail("O limiar de lançamento automático deve ser maior que o de revisão.");
+    if (parsed.data.autoPostThreshold !== undefined || parsed.data.reviewThreshold !== undefined) {
+      const current = await getSettings();
+      const autoPost = parsed.data.autoPostThreshold ?? current.autoPostThreshold;
+      const review = parsed.data.reviewThreshold ?? current.reviewThreshold;
+      if (autoPost < review) {
+        return fail(
+          "A certeza exigida para lançar sozinho não pode ser menor que a exigida para aceitar um boleto.",
+          422,
+        );
+      }
     }
     const settings = await updateSettings(parsed.data);
     await logAudit("settings_updated", { payload: parsed.data, actor: "admin" });
-    return ok(settings);
+    return ok(toPublicSettings(settings));
   } catch (error) {
     return fail(errorMessage(error));
   }

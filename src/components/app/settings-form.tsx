@@ -1,230 +1,281 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { fieldClass, Section } from "@/components/app/ui";
 import { Toggle } from "@/components/tailgrids/core/toggle";
-import type { AppSettings } from "@/lib/settings";
+import type { PublicSettings } from "@/lib/settings";
 
-export function SettingsForm({ initial }: { initial: AppSettings }) {
+const RIGOR_OPTIONS = [
+  { value: 0.98, label: "Rigoroso — só lança quando não há nenhuma dúvida" },
+  { value: 0.95, label: "Padrão (recomendado)" },
+  { value: 0.9, label: "Flexível — lança mais boletos sem revisão" },
+];
+
+const RETENTION_OPTIONS = [
+  { value: 30, label: "30 dias" },
+  { value: 60, label: "60 dias" },
+  { value: 90, label: "90 dias (recomendado)" },
+  { value: 180, label: "6 meses" },
+  { value: 365, label: "1 ano" },
+  { value: 730, label: "2 anos" },
+  { value: 1825, label: "5 anos" },
+];
+
+function percent(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
+function Row({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-text-primary">{title}</p>
+        <p className="mt-0.5 text-sm text-text-secondary">{description}</p>
+      </div>
+      <div className="shrink-0">{children}</div>
+    </div>
+  );
+}
+
+function Switch({
+  checked,
+  disabled,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  disabled: boolean;
+  label: string;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <span
+        className={`w-20 text-right text-sm font-medium ${checked ? "text-success-500" : "text-text-tertiary"}`}
+      >
+        {checked ? "Ligado" : "Desligado"}
+      </span>
+      <Toggle
+        size="md"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+        aria-label={label}
+      />
+    </div>
+  );
+}
+
+/**
+ * Ajustes do dia a dia. Cada mudança é gravada na hora — não existe botão
+ * "Salvar" para esquecer.
+ */
+export function SettingsForm({ initial }: { initial: PublicSettings }) {
   const router = useRouter();
-  const [form, setForm] = useState(initial);
-  const [busy, setBusy] = useState<"save" | "purge" | null>(null);
+  const [settings, setSettings] = useState(initial);
+  const [busy, setBusy] = useState(false);
 
-  const save = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setBusy("save");
+  const apply = async (changes: Partial<PublicSettings>, success: string) => {
+    const previous = settings;
+    setSettings({ ...settings, ...changes });
+    setBusy(true);
     try {
       const response = await fetch("/api/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(changes),
       });
       const payload = (await response.json()) as { ok: boolean; error?: string };
-      if (!response.ok || !payload.ok) throw new Error(payload.error ?? "Falha ao salvar.");
-      toast.success("Configurações salvas.");
+      if (!response.ok || !payload.ok) throw new Error(payload.error ?? "Não foi possível salvar.");
+      toast.success(success);
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao salvar.");
+      setSettings(previous);
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível salvar. Tente de novo.",
+      );
     } finally {
-      setBusy(null);
+      setBusy(false);
     }
+  };
+
+  const changeRetention = (days: number) => {
+    if (
+      days < settings.retentionDays &&
+      !window.confirm(
+        `Boletos e registros com mais de ${days} dias serão apagados em até 1 hora e não podem ser recuperados. Continuar?`,
+      )
+    ) {
+      return;
+    }
+    void apply({ retentionDays: days }, "Prazo de guarda atualizado.");
   };
 
   const purge = async () => {
-    if (!window.confirm("Executar a limpeza de retenção agora? Esta ação apaga dados antigos.")) {
+    if (
+      !window.confirm(
+        `Apagar agora os boletos e registros com mais de ${settings.retentionDays} dias? Isso não pode ser desfeito.`,
+      )
+    ) {
       return;
     }
-    setBusy("purge");
+    setBusy(true);
     try {
       const response = await fetch("/api/maintenance/purge", { method: "POST" });
       const payload = (await response.json()) as { ok: boolean; error?: string };
-      if (!response.ok || !payload.ok) throw new Error(payload.error ?? "Falha ao enfileirar.");
-      toast.success("Limpeza enfileirada.");
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error ?? "Não foi possível iniciar a limpeza.");
+      }
+      toast.success("Limpeza iniciada. Os dados antigos somem em instantes.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao enfileirar.");
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível iniciar a limpeza.",
+      );
     } finally {
-      setBusy(null);
+      setBusy(false);
     }
   };
 
+  const rigorIsPreset = RIGOR_OPTIONS.some(
+    (option) => Math.abs(option.value - settings.autoPostThreshold) < 0.0005,
+  );
+  const retentionIsPreset = RETENTION_OPTIONS.some(
+    (option) => option.value === settings.retentionDays,
+  );
+
   return (
-    <form onSubmit={save} className="space-y-5">
-      <Section
-        title="Lançamento automático"
-        description="Quando ativado, itens que passam em todas as travas são enviados sem revisão."
-      >
-        <div className="space-y-5">
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-card-border px-4 py-3">
-            <div>
-              <p className="text-sm font-medium text-text-primary">Ativar lançamento automático</p>
-              <p className="text-xs text-text-secondary">
-                O item continua visível na lista, com origem “Automático”.
-              </p>
-            </div>
-            <Toggle
-              checked={form.autoPostEnabled}
-              onChange={(event) =>
-                setForm((previous) => ({ ...previous, autoPostEnabled: event.target.checked }))
+    <>
+      <Section title="Automação" description="As mudanças são salvas na hora.">
+        <div className="divide-y divide-card-border">
+          <Row
+            title="Lançamento automático"
+            description={
+              settings.autoPostEnabled
+                ? "Boletos conferidos vão direto para o Conta Azul. Os que geram dúvida esperam a sua revisão."
+                : "Nenhum boleto é lançado sem a sua aprovação."
+            }
+          >
+            <Switch
+              checked={settings.autoPostEnabled}
+              disabled={busy}
+              label="Lançamento automático"
+              onChange={(next) =>
+                apply(
+                  { autoPostEnabled: next },
+                  next ? "Lançamento automático ligado." : "Lançamento automático desligado.",
+                )
               }
-              aria-label="Ativar lançamento automático"
             />
-          </div>
+          </Row>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block text-sm">
-              <span className="mb-1.5 block font-medium text-text-primary">
-                Limiar para lançamento automático
-              </span>
-              <input
-                type="number"
-                min={0.5}
-                max={1}
-                step={0.01}
-                className={fieldClass}
-                value={form.autoPostThreshold}
+          {settings.autoPostEnabled && (
+            <Row
+              title="Rigor da conferência"
+              description="Quanto mais rigoroso, mais boletos passam pela sua revisão antes de serem lançados."
+            >
+              <select
+                className={`${fieldClass} sm:w-80`}
+                value={String(settings.autoPostThreshold)}
+                disabled={busy}
+                aria-label="Rigor da conferência"
                 onChange={(event) =>
-                  setForm((previous) => ({
-                    ...previous,
-                    autoPostThreshold: Number(event.target.value),
-                  }))
+                  apply(
+                    { autoPostThreshold: Number(event.target.value) },
+                    "Rigor da conferência atualizado.",
+                  )
                 }
-              />
-              <span className="mt-1 block text-xs text-text-tertiary">
-                Padrão 0,95. Exige também match por CNPJ, qualidade ≥ 2 e classificação resolvida.
-              </span>
-            </label>
+              >
+                {!rigorIsPreset && (
+                  <option value={String(settings.autoPostThreshold)}>
+                    Personalizado ({percent(settings.autoPostThreshold)})
+                  </option>
+                )}
+                {RIGOR_OPTIONS.map((option) => (
+                  <option key={option.value} value={String(option.value)}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </Row>
+          )}
 
-            <label className="block text-sm">
-              <span className="mb-1.5 block font-medium text-text-primary">
-                Limiar mínimo para considerar boleto
-              </span>
-              <input
-                type="number"
-                min={0.5}
-                max={1}
-                step={0.01}
-                className={fieldClass}
-                value={form.reviewThreshold}
-                onChange={(event) =>
-                  setForm((previous) => ({
-                    ...previous,
-                    reviewThreshold: Number(event.target.value),
-                  }))
-                }
-              />
-              <span className="mt-1 block text-xs text-text-tertiary">
-                Padrão 0,80. Abaixo disso o PDF é descartado como “não é boleto”.
-              </span>
-            </label>
-          </div>
+          <Row
+            title="Boletos por link"
+            description={
+              settings.linkResolverEnabled
+                ? "Quando o e-mail traz um link em vez do PDF, o sistema abre o link e baixa o boleto."
+                : "E-mails que trazem só um link, sem o PDF anexado, são ignorados."
+            }
+          >
+            <Switch
+              checked={settings.linkResolverEnabled}
+              disabled={busy}
+              label="Boletos por link"
+              onChange={(next) =>
+                apply(
+                  { linkResolverEnabled: next },
+                  next ? "Boletos por link ligado." : "Boletos por link desligado.",
+                )
+              }
+            />
+          </Row>
         </div>
       </Section>
 
       <Section
-        title="Boletos por link"
-        description="E-mails sem PDF anexado: um agente abre o link, encontra o boleto e aprende o caminho para as próximas vezes."
+        title="Guarda de dados"
+        description="Por quanto tempo boletos e registros ficam no sistema."
       >
-        <div className="space-y-5">
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-card-border px-4 py-3">
-            <div>
-              <p className="text-sm font-medium text-text-primary">Buscar boletos em links</p>
-              <p className="text-xs text-text-secondary">
-                O corpo do e-mail é lido só em memória; apenas a URL usada fica registrada.
-              </p>
-            </div>
-            <Toggle
-              checked={form.linkResolverEnabled}
-              onChange={(event) =>
-                setForm((previous) => ({ ...previous, linkResolverEnabled: event.target.checked }))
-              }
-              aria-label="Buscar boletos em links"
-            />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block text-sm">
-              <span className="mb-1.5 block font-medium text-text-primary">Modelo do agente (OpenRouter)</span>
-              <input
-                className={fieldClass}
-                value={form.linkAgentModel}
-                onChange={(event) =>
-                  setForm((previous) => ({ ...previous, linkAgentModel: event.target.value }))
-                }
-              />
-              <span className="mt-1 block text-xs text-text-tertiary">
-                Precisa suportar ferramentas (tool calling) e, de preferência, imagens.
-              </span>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1.5 block font-medium text-text-primary">Tentativas de aprendizado</span>
-              <input
-                type="number"
-                min={1}
-                max={6}
-                className={fieldClass}
-                value={form.linkLearningAttempts}
-                onChange={(event) =>
-                  setForm((previous) => ({
-                    ...previous,
-                    linkLearningAttempts: Number(event.target.value),
-                  }))
-                }
-              />
-              <span className="mt-1 block text-xs text-text-tertiary">
-                Quantas vezes refazer quando o caminho não se confirma. Captcha e site fora do ar param na hora.
-              </span>
-            </label>
-          </div>
-        </div>
-      </Section>
+        <div className="divide-y divide-card-border">
+          <Row
+            title="Apagar dados após"
+            description="Conta a partir da chegada do boleto ou do lançamento, o que acontecer por último. O que já foi lançado continua no Conta Azul."
+          >
+            <select
+              className={`${fieldClass} sm:w-56`}
+              value={String(settings.retentionDays)}
+              disabled={busy}
+              aria-label="Apagar dados após"
+              onChange={(event) => changeRetention(Number(event.target.value))}
+            >
+              {!retentionIsPreset && (
+                <option value={String(settings.retentionDays)}>
+                  {settings.retentionDays} dias
+                </option>
+              )}
+              {RETENTION_OPTIONS.map((option) => (
+                <option key={option.value} value={String(option.value)}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </Row>
 
-      <Section
-        title="Retenção de dados"
-        description="Conta a partir da entrada no sistema ou do lançamento, o que ocorrer por último."
-      >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="block text-sm">
-            <span className="mb-1.5 block font-medium text-text-primary">Dias de retenção</span>
-            <input
-              type="number"
-              min={1}
-              max={3650}
-              className={fieldClass}
-              value={form.retentionDays}
-              onChange={(event) =>
-                setForm((previous) => ({
-                  ...previous,
-                  retentionDays: Number(event.target.value),
-                }))
-              }
-            />
-            <span className="mt-1 block text-xs text-text-tertiary">
-              Padrão 90 dias. Apaga registros do banco e arquivos do disco.
-            </span>
-          </label>
-          <div className="flex items-end">
+          <Row
+            title="Limpar agora"
+            description="A limpeza já acontece sozinha, de hora em hora. Use só se precisar liberar espaço imediatamente."
+          >
             <button
               type="button"
               onClick={purge}
-              disabled={busy !== null}
+              disabled={busy}
               className="rounded-lg border border-button-error-outline-stroke px-4 py-2.5 text-sm font-medium text-button-error-outline-text transition hover:bg-button-error-outline-hover-background disabled:opacity-60"
             >
-              {busy === "purge" ? "Enfileirando..." : "Executar limpeza agora"}
+              Apagar dados antigos
             </button>
-          </div>
+          </Row>
         </div>
       </Section>
-
-      <div className="flex justify-end">
-        <button
-          type="submit"
-          disabled={busy !== null}
-          className="rounded-lg bg-button-primary-background px-5 py-2.5 text-sm font-medium text-button-primary-text transition hover:bg-button-primary-hover-background disabled:opacity-60"
-        >
-          {busy === "save" ? "Salvando..." : "Salvar configurações"}
-        </button>
-      </div>
-    </form>
+    </>
   );
 }

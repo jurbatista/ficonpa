@@ -27,14 +27,19 @@ async function view() {
   ]);
 
   return {
-    openrouterApiKey: maskSecret(config.openrouterApiKey),
     contaAzulClientId: config.contaAzulClientId,
     contaAzulClientSecret: maskSecret(config.contaAzulClientSecret),
     contaAzulRedirectUri: config.contaAzulRedirectUri,
     microsoftClientId: config.microsoftClientId,
     microsoftClientSecret: maskSecret(config.microsoftClientSecret),
     microsoftRedirectUri: microsoftRedirectUri(),
-    status,
+    status: {
+      contaAzulClientId: status.contaAzulClientId,
+      contaAzulClientSecret: status.contaAzulClientSecret,
+      contaAzulRedirectUri: status.contaAzulRedirectUri,
+      microsoftClientId: status.microsoftClientId,
+      microsoftClientSecret: status.microsoftClientSecret,
+    },
   };
 }
 
@@ -47,7 +52,7 @@ export async function PATCH(request: Request) {
     const body = await readJson<unknown>(request);
     const parsed = schema.safeParse(body);
     if (!parsed.success) {
-      return fail("Dados de integração inválidos. Verifique a URL de redirecionamento.", 422);
+      return fail("Dados inválidos. Confira o endereço de retorno.", 422);
     }
 
     const fields = Object.entries(parsed.data)

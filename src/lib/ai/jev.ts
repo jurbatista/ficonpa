@@ -98,7 +98,7 @@ export async function decideWithJev(input: JevInput): Promise<JevDecision> {
       answers: {},
       cost: 0,
       failed: true,
-      error: "Chave da OpenRouter não configurada em Configurações.",
+      error: "Serviço de conferência não configurado. Fale com o suporte.",
     };
   }
 
@@ -126,7 +126,7 @@ export async function decideWithJev(input: JevInput): Promise<JevDecision> {
         answers: {},
         cost: 0,
         failed: true,
-        error: `Jev ${response.status}: ${text.slice(0, 400)}`,
+        error: `Serviço de conferência indisponível (${response.status}): ${text.slice(0, 400)}`,
       };
     }
 
@@ -150,7 +150,7 @@ export async function decideWithJev(input: JevInput): Promise<JevDecision> {
       answers,
       cost: payload.usage?.cost ?? 0,
       failed,
-      error: failed ? "Jev não respondeu todas as perguntas obrigatórias." : undefined,
+      error: failed ? "A conferência do documento ficou incompleta." : undefined,
     };
   } catch (error) {
     return {

@@ -1,9 +1,9 @@
 import { PageHeader } from "@/components/app/ui";
 import { SettingsForm } from "@/components/app/settings-form";
-import { IntegrationSettings } from "@/components/app/integration-settings";
-import { microsoftRedirectUri } from "@/lib/mail/microsoft";
+import { TechnicalSettings } from "@/components/app/technical-settings";
 import { PasswordForm } from "@/components/app/password-form";
-import { getSettings } from "@/lib/settings";
+import { microsoftRedirectUri } from "@/lib/mail/microsoft";
+import { getSettings, toPublicSettings } from "@/lib/settings";
 import {
   getIntegrationConfig,
   getIntegrationConfigStatus,
@@ -13,35 +13,44 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const [settings, integration, integrationStatus] = await Promise.all([
+  const [allSettings, integration, status] = await Promise.all([
     getSettings(),
     getIntegrationConfig(),
     getIntegrationConfigStatus(),
   ]);
+  // Só o que a tela usa vai para o navegador.
+  const settings = toPublicSettings(allSettings);
 
   return (
     <>
       <PageHeader
         title="Configurações"
-        description="Automação, integrações, segurança e retenção de dados."
+        description="Como o sistema trabalha, por quanto tempo guarda os dados e a senha de acesso."
       />
-      <div className="space-y-5 px-5 pb-8 lg:px-7">
+      <div className="max-w-4xl space-y-5 px-5 pb-8 lg:px-7">
         <SettingsForm initial={settings} />
 
-        <IntegrationSettings
+        <PasswordForm />
+
+        <TechnicalSettings
           data={{
-            openrouterApiKey: maskSecret(integration.openrouterApiKey),
             contaAzulClientId: integration.contaAzulClientId,
             contaAzulClientSecret: maskSecret(integration.contaAzulClientSecret),
             contaAzulRedirectUri: integration.contaAzulRedirectUri,
             microsoftClientId: integration.microsoftClientId,
             microsoftClientSecret: maskSecret(integration.microsoftClientSecret),
             microsoftRedirectUri: microsoftRedirectUri(),
-            status: integrationStatus,
+            reviewThreshold: settings.reviewThreshold,
+            linkLearningAttempts: settings.linkLearningAttempts,
+            status: {
+              contaAzulClientId: status.contaAzulClientId,
+              contaAzulClientSecret: status.contaAzulClientSecret,
+              contaAzulRedirectUri: status.contaAzulRedirectUri,
+              microsoftClientId: status.microsoftClientId,
+              microsoftClientSecret: status.microsoftClientSecret,
+            },
           }}
         />
-
-        <PasswordForm />
       </div>
     </>
   );
