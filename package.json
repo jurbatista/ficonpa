@@ -13,7 +13,8 @@
         "db:migrate": "drizzle-kit migrate",
         "db:push": "drizzle-kit push",
         "db:studio": "drizzle-kit studio",
-        "link:learn": "tsx src/scripts/learn-link.ts"
+        "link:learn": "tsx src/scripts/learn-link.ts",
+        "brand:build": "tsx src/scripts/build-brand.ts"
     },
     "dependencies": {
         "@base-ui/react": "^1.6.0",

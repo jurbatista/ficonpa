@@ -1,4 +1,5 @@
 import Providers from "@/app/providers";
+import { appUrl } from "@/lib/env";
 import { cn } from "@/utils/cn";
 import type { Metadata } from "next";
 import { ThemeProvider } from "next-themes";
@@ -11,13 +12,33 @@ const geistInter = Inter({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: {
-    template: "%s · ficonpa",
-    default: "ficonpa",
-  },
-  description: "Boletos do e-mail direto para o Conta Azul.",
-};
+// O endereço público só é conhecido com o servidor rodando (APP_URL), e a imagem de
+// compartilhamento precisa de um endereço completo: por isso nada aqui é pré-gerado.
+export const dynamic = "force-dynamic";
+
+const DESCRIPTION = "Boletos do e-mail direto para o Conta Azul.";
+
+export function generateMetadata(): Metadata {
+  return {
+    metadataBase: new URL(appUrl()),
+    title: {
+      template: "%s · ficonpa",
+      default: "ficonpa",
+    },
+    description: DESCRIPTION,
+    applicationName: "ficonpa",
+    // Sistema interno: não deve aparecer em buscadores.
+    robots: { index: false, follow: false },
+    openGraph: {
+      type: "website",
+      siteName: "ficonpa",
+      title: "ficonpa",
+      description: DESCRIPTION,
+      locale: "pt_BR",
+      url: "/",
+    },
+  };
+}
 
 export default function RootLayout({
   children,

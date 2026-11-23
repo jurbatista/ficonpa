@@ -64,6 +64,11 @@ Localmente é preciso `npx playwright install chromium`; no Docker a imagem já 
 - **Boletos por link** — aberta a partir do aviso na página inicial ou de Configurações: links que não
   puderam ser baixados, teste de um link e sites conhecidos.
 
+## Marca
+
+`src/app/icon.svg` é a fonte da logo. O favicon, os ícones de app e a imagem de compartilhamento
+saem dele com `npm run brand:build`. A mesma geometria está em `src/components/common/brand.tsx`.
+
 ## Rodando localmente
 
 Pré-requisitos: Node 20.9+ e Docker (para Postgres/Redis).

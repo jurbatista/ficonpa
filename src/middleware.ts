@@ -9,6 +9,16 @@ const PUBLIC_PATHS = [
   "/api/conta-azul/callback",
 ];
 
+/** Marca e ícones: precisam abrir na tela de login e em pré-visualizações de link. */
+const PUBLIC_FILES = [
+  "/favicon.ico",
+  "/icon.svg",
+  "/apple-icon.png",
+  "/opengraph-image.png",
+  "/manifest.webmanifest",
+  "/robots.txt",
+];
+
 function isPublic(pathname: string): boolean {
   if (PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))) {
     return true;
@@ -16,8 +26,8 @@ function isPublic(pathname: string): boolean {
   return (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/images") ||
-    pathname === "/favicon.ico" ||
-    pathname === "/robots.txt"
+    pathname.startsWith("/icons/") ||
+    PUBLIC_FILES.includes(pathname)
   );
 }
 
