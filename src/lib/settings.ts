@@ -14,6 +14,16 @@ export type AppSettings = {
   linkResolverEnabled: boolean;
   linkAgentModel: string;
   linkLearningAttempts: number;
+  /** Regras escritas pela empresa, aplicadas na conferência de cada documento. */
+  customRules: string;
+  /** Antes de lançar, confere se a cobrança já existe no Conta Azul. */
+  duplicateCheckEnabled: boolean;
+  /** Boleto atrasado reenviado com juros conta como a mesma cobrança: vale o primeiro lançamento. */
+  reissueCheckEnabled: boolean;
+  /** Até quantos dias antes do novo vencimento o primeiro lançamento é procurado. */
+  reissueWindowDays: number;
+  /** Aumento máximo (juros e multa), em %, para ainda ser a mesma cobrança. */
+  reissueMaxIncreasePercent: number;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -29,6 +39,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   linkAgentModel:
     process.env.LINK_AGENT_MODEL ?? process.env.OPENROUTER_MODEL ?? "qwen/qwen3-vl-235b-a22b-instruct",
   linkLearningAttempts: 3,
+  customRules: "",
+  duplicateCheckEnabled: true,
+  reissueCheckEnabled: true,
+  reissueWindowDays: 90,
+  reissueMaxIncreasePercent: 20,
 };
 
 /** O que a tela de configurações enxerga. Os demais ajustes são internos. */
@@ -40,6 +55,11 @@ export type PublicSettings = Pick<
   | "retentionDays"
   | "linkResolverEnabled"
   | "linkLearningAttempts"
+  | "customRules"
+  | "duplicateCheckEnabled"
+  | "reissueCheckEnabled"
+  | "reissueWindowDays"
+  | "reissueMaxIncreasePercent"
 >;
 
 export function toPublicSettings(settings: AppSettings): PublicSettings {
@@ -50,6 +70,11 @@ export function toPublicSettings(settings: AppSettings): PublicSettings {
     retentionDays: settings.retentionDays,
     linkResolverEnabled: settings.linkResolverEnabled,
     linkLearningAttempts: settings.linkLearningAttempts,
+    customRules: settings.customRules,
+    duplicateCheckEnabled: settings.duplicateCheckEnabled,
+    reissueCheckEnabled: settings.reissueCheckEnabled,
+    reissueWindowDays: settings.reissueWindowDays,
+    reissueMaxIncreasePercent: settings.reissueMaxIncreasePercent,
   };
 }
 
@@ -65,6 +90,11 @@ const KEY_MAP: Record<keyof AppSettings, string> = {
   linkResolverEnabled: "link_resolver_enabled",
   linkAgentModel: "link_agent_model",
   linkLearningAttempts: "link_learning_attempts",
+  customRules: "custom_rules",
+  duplicateCheckEnabled: "duplicate_check_enabled",
+  reissueCheckEnabled: "reissue_check_enabled",
+  reissueWindowDays: "reissue_window_days",
+  reissueMaxIncreasePercent: "reissue_max_increase_percent",
 };
 
 export async function getSettings(): Promise<AppSettings> {

@@ -16,6 +16,8 @@ export type TechnicalSettingsData = {
   microsoftRedirectUri: string;
   reviewThreshold: number;
   linkLearningAttempts: number;
+  reissueMaxIncreasePercent: number;
+  reissueWindowDays: number;
   status: {
     contaAzulClientId: Source;
     contaAzulClientSecret: Source;
@@ -123,6 +125,8 @@ export function TechnicalSettings({ data }: { data: TechnicalSettingsData }) {
     String(Math.round(data.reviewThreshold * 100)),
   );
   const [attempts, setAttempts] = useState(String(data.linkLearningAttempts));
+  const [increase, setIncrease] = useState(String(data.reissueMaxIncreasePercent));
+  const [windowDays, setWindowDays] = useState(String(data.reissueWindowDays));
   const [busy, setBusy] = useState(false);
 
   // Outras telas apontam para /configuracoes#microsoft ou #conta-azul: abre a seção e rola até lá.
@@ -146,6 +150,16 @@ export function TechnicalSettings({ data }: { data: TechnicalSettingsData }) {
       toast.error("As tentativas de busca por link devem ficar entre 1 e 6.");
       return;
     }
+    const maxIncrease = Number(increase.replace(",", "."));
+    if (!increase.trim() || !Number.isFinite(maxIncrease) || maxIncrease < 0 || maxIncrease > 100) {
+      toast.error("O aumento máximo por juros e multa deve ficar entre 0 e 100.");
+      return;
+    }
+    const lookback = Number(windowDays);
+    if (!windowDays.trim() || !Number.isInteger(lookback) || lookback < 1 || lookback > 365) {
+      toast.error("Os dias para procurar o primeiro lançamento devem ficar entre 1 e 365.");
+      return;
+    }
 
     const integrations: Record<string, string> = {};
     if (clientId.trim() !== (data.contaAzulClientId ?? "")) {
@@ -165,6 +179,10 @@ export function TechnicalSettings({ data }: { data: TechnicalSettingsData }) {
     const general: Record<string, number> = {};
     if (review !== Math.round(data.reviewThreshold * 100)) general.reviewThreshold = review / 100;
     if (tries !== data.linkLearningAttempts) general.linkLearningAttempts = tries;
+    if (maxIncrease !== data.reissueMaxIncreasePercent) {
+      general.reissueMaxIncreasePercent = maxIncrease;
+    }
+    if (lookback !== data.reissueWindowDays) general.reissueWindowDays = lookback;
 
     const hasIntegrations = Object.keys(integrations).length > 0;
     const hasGeneral = Object.keys(general).length > 0;
@@ -333,6 +351,36 @@ export function TechnicalSettings({ data }: { data: TechnicalSettingsData }) {
               />
               <span className="mt-1.5 block text-xs text-text-tertiary">
                 Padrão 3.
+              </span>
+            </label>
+            <label className="block text-sm">
+              <Label text="Aumento máximo por juros e multa (%)" />
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={0.5}
+                className={fieldClass}
+                value={increase}
+                onChange={(event) => setIncrease(event.target.value)}
+              />
+              <span className="mt-1.5 block text-xs text-text-tertiary">
+                Padrão 20. Acima disso é tratado como outra cobrança.
+              </span>
+            </label>
+            <label className="block text-sm">
+              <Label text="Dias para procurar o primeiro lançamento" />
+              <input
+                type="number"
+                min={1}
+                max={365}
+                step={1}
+                className={fieldClass}
+                value={windowDays}
+                onChange={(event) => setWindowDays(event.target.value)}
+              />
+              <span className="mt-1.5 block text-xs text-text-tertiary">
+                Padrão 90.
               </span>
             </label>
           </div>

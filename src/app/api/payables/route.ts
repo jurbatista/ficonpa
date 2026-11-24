@@ -4,6 +4,7 @@ import { documents, payables } from "@/db/schema";
 import { errorMessage, fail, ok, readJson } from "@/lib/api";
 import { listPayables } from "@/lib/queries";
 import { logAudit } from "@/lib/audit";
+import { priorChargeNote } from "@/lib/rules/dedupe";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -60,10 +61,16 @@ export async function PATCH(request: Request) {
     if (body.dueDate) values.dueDate = body.dueDate;
     if (body.competenceDate) values.competenceDate = body.competenceDate;
 
-    await getDb().update(payables).set(values).where(eq(payables.id, body.id));
+    const [updated] = await getDb()
+      .update(payables)
+      .set(values)
+      .where(eq(payables.id, body.id))
+      .returning();
+    // Com os dados novos, a cobrança ainda parece uma que já existe?
+    const note = await priorChargeNote(updated);
     await getDb()
       .update(documents)
-      .set({ needsAttention: false, attentionReason: null, status: "READY" })
+      .set({ needsAttention: note !== null, attentionReason: note, status: "READY" })
       .where(eq(documents.id, payable.documentId));
 
     await logAudit("payable_updated", {

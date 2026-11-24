@@ -176,6 +176,48 @@ export function SettingsForm({ initial }: { initial: PublicSettings }) {
         )}
 
         <Row
+          title="Conferir no Conta Azul"
+          description={
+            settings.duplicateCheckEnabled
+              ? "Cobrança que já está no Conta Azul não é lançada de novo."
+              : "Só os boletos recebidos aqui são comparados entre si."
+          }
+        >
+          <Switch
+            checked={settings.duplicateCheckEnabled}
+            disabled={busy}
+            label="Conferir no Conta Azul"
+            onChange={(next) =>
+              apply(
+                { duplicateCheckEnabled: next },
+                next ? "Conferência no Conta Azul ligada." : "Conferência no Conta Azul desligada.",
+              )
+            }
+          />
+        </Row>
+
+        <Row
+          title="Boleto atrasado com juros"
+          description={
+            settings.reissueCheckEnabled
+              ? "Vale o primeiro lançamento; o reenvio é descartado."
+              : "O reenvio entra como uma cobrança nova."
+          }
+        >
+          <Switch
+            checked={settings.reissueCheckEnabled}
+            disabled={busy}
+            label="Boleto atrasado com juros"
+            onChange={(next) =>
+              apply(
+                { reissueCheckEnabled: next },
+                next ? "Vale o primeiro lançamento." : "Reenvios entram como cobrança nova.",
+              )
+            }
+          />
+        </Row>
+
+        <Row
           title="Boletos por link"
           description={
             <>

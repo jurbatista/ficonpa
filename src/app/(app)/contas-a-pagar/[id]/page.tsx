@@ -38,7 +38,7 @@ export default async function PayableDetailPage({
     note:
       payable.status === "FAILED"
         ? plainReason(payable.error, LAUNCH_FAILED)
-        : document.needsAttention
+        : document.needsAttention || payable.status === "REJECTED"
           ? plainReason(document.attentionReason)
           : null,
     emailSubject: message.subject,
@@ -55,7 +55,15 @@ export default async function PayableDetailPage({
       </div>
       <PageHeader
         title={payable.supplierName ?? "Boleto sem fornecedor"}
-        actions={<StatusBadge status={payable.status} />}
+        actions={
+          <StatusBadge
+            status={
+              payable.status === "REJECTED" && document.status === "DUPLICATE"
+                ? "DUPLICATE"
+                : payable.status
+            }
+          />
+        }
       />
       <PayableDetail
         key={`${payable.status}-${payable.updatedAt.getTime()}`}

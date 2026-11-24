@@ -11,6 +11,7 @@ import {
 import { getConnection } from "@/lib/contaazul/connection";
 import { isContaAzulConfigured } from "@/lib/contaazul/oauth";
 import { formatDocument } from "@/lib/format";
+import { PLAIN_NOTE } from "@/lib/rules/dedupe";
 import { getSettings } from "@/lib/settings";
 
 /**
@@ -65,6 +66,7 @@ export function plainReason(
 ): string | null {
   if (!raw) return null;
   const text = raw.trim();
+  if (PLAIN_NOTE.test(text)) return text;
 
   const missing = text.match(/Campos obrigatórios ausentes: (.+?)\.?$/i);
   if (missing) return `Falta preencher: ${missing[1]}.`;
@@ -146,6 +148,7 @@ export async function listBoletos(view: BoletoView, search?: string): Promise<Bo
       postedAt: payables.postedAt,
       needsAttention: documents.needsAttention,
       attentionReason: documents.attentionReason,
+      documentStatus: documents.status,
       emailFrom: emailMessages.fromAddress,
       emailSubject: emailMessages.subject,
     })
@@ -168,11 +171,12 @@ export async function listBoletos(view: BoletoView, search?: string): Promise<Bo
     emailSubject: row.emailSubject,
     value: row.value,
     dueDate: row.dueDate,
-    status: row.status,
+    // Descartado pelo sistema por já existir: aparece como "Repetido", com o motivo.
+    status: row.status === "REJECTED" && row.documentStatus === "DUPLICATE" ? "DUPLICATE" : row.status,
     note:
       row.status === "FAILED"
         ? plainReason(row.error, LAUNCH_FAILED)
-        : row.status === "DRAFT" && row.needsAttention
+        : (row.status === "DRAFT" && row.needsAttention) || row.status === "REJECTED"
           ? plainReason(row.attentionReason)
           : null,
     auto: row.origin === "auto",

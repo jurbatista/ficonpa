@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getSettings, toPublicSettings, updateSettings } from "@/lib/settings";
+import { CUSTOM_RULES_MAX_LENGTH } from "@/lib/limits";
 import { errorMessage, fail, ok, readJson } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
 
@@ -14,6 +15,11 @@ const schema = z.object({
   linkResolverEnabled: z.boolean().optional(),
   linkAgentModel: z.string().min(1).optional(),
   linkLearningAttempts: z.number().int().min(1).max(6).optional(),
+  customRules: z.string().trim().max(CUSTOM_RULES_MAX_LENGTH).optional(),
+  duplicateCheckEnabled: z.boolean().optional(),
+  reissueCheckEnabled: z.boolean().optional(),
+  reissueWindowDays: z.number().int().min(1).max(365).optional(),
+  reissueMaxIncreasePercent: z.number().min(0).max(100).optional(),
 });
 
 export async function GET() {

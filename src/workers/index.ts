@@ -142,9 +142,13 @@ async function main() {
   const postWorker = new Worker(
     QUEUE_NAMES.postPayable,
     async (job) => {
-      const { payableId, actor } = job.data as { payableId: string; actor?: string };
-      log("lançando conta a pagar", { payableId });
-      const result = await postPayable(payableId, actor ?? "sistema");
+      const { payableId, actor, confirmed } = job.data as {
+        payableId: string;
+        actor?: string;
+        confirmed?: boolean;
+      };
+      log("lançando conta a pagar", { payableId, confirmed: Boolean(confirmed) });
+      const result = await postPayable(payableId, actor ?? "sistema", { confirmed });
       log("lançamento finalizado", { payableId, ...result });
       if (!result.ok) throw new Error(result.error);
       return result;

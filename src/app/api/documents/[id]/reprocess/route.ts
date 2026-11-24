@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { documents } from "@/db/schema";
+import { documents, payables } from "@/db/schema";
 import { enqueue, QUEUE_NAMES } from "@/lib/queue";
 import { errorMessage, fail, ok } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
@@ -17,6 +17,13 @@ export async function POST(
       .where(eq(documents.id, id))
       .limit(1);
     if (!document) return fail("Documento não encontrado.", 404);
+
+    const [posted] = await getDb()
+      .select({ id: payables.id })
+      .from(payables)
+      .where(and(eq(payables.documentId, id), eq(payables.status, "POSTED")))
+      .limit(1);
+    if (posted) return fail("Este boleto já foi lançado no Conta Azul.");
 
     await getDb()
       .update(documents)

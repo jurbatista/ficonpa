@@ -118,6 +118,20 @@ export function parseBankBoleto(linhaDigitavel: string): ParsedBankBoleto | null
   };
 }
 
+/**
+ * Identidade do título no banco: código do banco + campo livre (carteira, nosso número,
+ * agência e conta). Um boleto reemitido com novo vencimento ou com juros mantém esta
+ * chave; o que muda na linha digitável é só o fator de vencimento e o valor.
+ * Só existe para boletos bancários (47 dígitos).
+ */
+export function boletoTitleKey(linhaDigitavel: string | null | undefined): string | null {
+  const digits = (linhaDigitavel ?? "").replace(/\D/g, "");
+  if (digits.length !== 47) return null;
+  const campoLivre = digits.slice(4, 9) + digits.slice(10, 20) + digits.slice(21, 31);
+  if (/^0+$/.test(campoLivre)) return null;
+  return `${digits.slice(0, 3)}:${campoLivre}`;
+}
+
 export function findLinhaDigitavel(text: string): string | null {
   const candidates = text.match(/(?:\d[\s.\-]?){47,48}/g) ?? [];
   for (const candidate of candidates) {

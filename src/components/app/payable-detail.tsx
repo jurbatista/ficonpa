@@ -39,14 +39,24 @@ type Catalogs = {
 
 type Busy = "save" | "launch" | "discard" | "restore" | "reread" | null;
 
+/** O servidor achou a cobrança já lançada e quer saber se é para lançar mesmo assim. */
+class NeedsConfirmation extends Error {}
+
 async function send(path: string, method: "POST" | "PATCH", body?: unknown) {
   const response = await fetch(path, {
     method,
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
-  const payload = (await response.json().catch(() => ({ ok: false }))) as { ok: boolean; error?: string };
-  if (!response.ok || !payload.ok) throw new Error(payload.error ?? "Não deu certo. Tente de novo.");
+  const payload = (await response.json().catch(() => ({ ok: false }))) as {
+    ok: boolean;
+    error?: string;
+    needsConfirmation?: boolean;
+  };
+  if (!response.ok || !payload.ok) {
+    const message = payload.error ?? "Não deu certo. Tente de novo.";
+    throw payload.needsConfirmation ? new NeedsConfirmation(message) : new Error(message);
+  }
 }
 
 function Field({ label, wide, children }: { label: string; wide?: boolean; children: React.ReactNode }) {
@@ -135,14 +145,30 @@ export function PayableDetail({ data, catalogs }: { data: PayableDetailData; cat
       toast.error(`Falta preencher: ${missing.join(", ")}.`);
       return;
     }
-    void run(
-      "launch",
-      async () => {
+    const approve = `/api/payables/${data.id}/approve`;
+    const work = async () => {
+      setBusy("launch");
+      try {
         await save();
-        await send(`/api/payables/${data.id}/approve`, "POST");
-      },
-      "Lançando no Conta Azul…",
-    );
+        try {
+          await send(approve, "POST");
+        } catch (error) {
+          if (!(error instanceof NeedsConfirmation)) throw error;
+          if (!window.confirm(`${error.message}\n\nLançar mesmo assim?`)) {
+            router.refresh();
+            return;
+          }
+          await send(approve, "POST", { confirmed: true });
+        }
+        toast.success("Lançando no Conta Azul…");
+        router.refresh();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Não deu certo. Tente de novo.");
+      } finally {
+        setBusy(null);
+      }
+    };
+    void work();
   };
 
   const reread = () => {
@@ -153,7 +179,7 @@ export function PayableDetail({ data, catalogs }: { data: PayableDetailData; cat
   return (
     <div className="grid items-start gap-5 px-5 pb-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] lg:px-7">
       <Card className="p-5">
-        {data.note && !locked && (
+        {data.note && (!locked || discarded) && (
           <p className="mb-5 rounded-lg bg-badge-warning-background px-3.5 py-2.5 text-sm text-badge-warning-text">
             {data.note}
           </p>

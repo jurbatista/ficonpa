@@ -3,12 +3,22 @@ import { getDb } from "@/lib/db";
 import { documents, payables } from "@/db/schema";
 import { createContaAzulPayable } from "@/lib/contaazul/payables";
 import { logAudit } from "@/lib/audit";
+import { checkPayablePriorCharge, priorCheckNote } from "@/lib/rules/dedupe";
+import { getSettings } from "@/lib/settings";
 
 export type PostResult =
   | { ok: true; eventId: string }
   | { ok: false; error: string };
 
-export async function postPayable(payableId: string, actor = "sistema"): Promise<PostResult> {
+/**
+ * Lança no Conta Azul. Antes confere se a cobrança já existe; só `confirmed`
+ * (uma pessoa mandou lançar mesmo assim, ou uma regra explícita autoriza) dispensa isso.
+ */
+export async function postPayable(
+  payableId: string,
+  actor = "sistema",
+  options: { confirmed?: boolean } = {},
+): Promise<PostResult> {
   const db = getDb();
   const [payable] = await db.select().from(payables).where(eq(payables.id, payableId)).limit(1);
   if (!payable) return { ok: false, error: "Lançamento não encontrado." };
@@ -30,6 +40,32 @@ export async function postPayable(payableId: string, actor = "sistema"): Promise
       .set({ needsAttention: true, attentionReason: error })
       .where(eq(documents.id, payable.documentId));
     return { ok: false, error };
+  }
+
+  if (!options.confirmed) {
+    let blocked: string | null;
+    try {
+      blocked = priorCheckNote(await checkPayablePriorCharge(payable, await getSettings()));
+    } catch (error) {
+      blocked = error instanceof Error ? error.message : String(error);
+    }
+    if (blocked) {
+      await db
+        .update(payables)
+        .set({ status: "FAILED", error: blocked, updatedAt: new Date() })
+        .where(eq(payables.id, payableId));
+      await db
+        .update(documents)
+        .set({ needsAttention: true, attentionReason: blocked })
+        .where(eq(documents.id, payable.documentId));
+      await logAudit("payable_post_blocked", {
+        entity: "payable",
+        entityId: payableId,
+        actor,
+        payload: { reason: blocked },
+      });
+      return { ok: false, error: blocked };
+    }
   }
 
   try {
@@ -67,7 +103,7 @@ export async function postPayable(payableId: string, actor = "sistema"): Promise
       entity: "payable",
       entityId: payableId,
       actor,
-      payload: { eventId: created.id, origin: payable.origin },
+      payload: { eventId: created.id, origin: payable.origin, confirmed: Boolean(options.confirmed) },
     });
 
     return { ok: true, eventId: created.id };

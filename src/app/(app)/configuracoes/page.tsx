@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/app/ui";
 import { SettingsForm } from "@/components/app/settings-form";
+import { RulesForm } from "@/components/app/rules-form";
 import { TechnicalSettings } from "@/components/app/technical-settings";
 import { PasswordForm } from "@/components/app/password-form";
 import { microsoftRedirectUri } from "@/lib/mail/microsoft";
@@ -27,6 +28,8 @@ export default async function SettingsPage() {
       <div className="max-w-3xl space-y-5 px-5 pb-8 lg:px-7">
         <SettingsForm initial={settings} />
 
+        <RulesForm initial={settings.customRules} />
+
         <PasswordForm />
 
         <TechnicalSettings
@@ -39,6 +42,8 @@ export default async function SettingsPage() {
             microsoftRedirectUri: microsoftRedirectUri(),
             reviewThreshold: settings.reviewThreshold,
             linkLearningAttempts: settings.linkLearningAttempts,
+            reissueMaxIncreasePercent: settings.reissueMaxIncreasePercent,
+            reissueWindowDays: settings.reissueWindowDays,
             status: {
               contaAzulClientId: status.contaAzulClientId,
               contaAzulClientSecret: status.contaAzulClientSecret,

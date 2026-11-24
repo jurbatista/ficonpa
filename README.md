@@ -148,8 +148,44 @@ Uma instalação atende **uma empresa** do Conta Azul.
   - match de fornecedor por **CNPJ exato**;
   - qualidade da extração ≥ 2;
   - categoria e conta financeira resolvidas;
-  - nenhuma duplicidade (fornecedor + valor + vencimento).
+  - nenhuma cobrança igual ou parecida já lançada (ver abaixo);
+  - nenhuma regra da empresa pedindo conferência.
 - Qualquer falha, recusa ou baixa confiança da análise automática → revisão humana (**fail closed**).
+
+### Cobrança que já existe
+
+Vale sempre o **primeiro lançamento**. Cada boleto é comparado com as cobranças do mesmo fornecedor
+que já passaram por aqui e, com **Conferir no Conta Azul** ligado, com as contas a pagar que já
+estão lá (`GET /v1/financeiro/eventos-financeiros/contas-a-pagar/buscar`, lançadas por aqui ou à mão).
+
+| Situação | O que acontece |
+| --- | --- |
+| Mesma linha digitável, ou mesmo valor e vencimento | Descartado como “Repetido” |
+| Mesmo título no banco com outro vencimento ou valor (boleto reemitido) | Descartado como “Repetido” |
+| Boleto com juros/multa cujo valor original (ou vencimento original) bate com uma cobrança anterior em aberto | Descartado como “Repetido” |
+| Parecido, sem prova (valor maior dentro do limite de juros sobre cobrança vencida e em aberto; mesmo valor com vencimento a até 5 dias; anterior já paga) | Fica em revisão com o aviso; não é lançado sozinho |
+| Não foi possível consultar o Conta Azul | Fica em revisão com o aviso; não é lançado sozinho |
+
+As linhas de boleto reemitido e de juros só valem com **Boleto atrasado com juros** ligado; desligado,
+o reenvio entra como cobrança nova. O limite de juros (padrão 20%) e o prazo para procurar o primeiro
+lançamento (padrão 90 dias) ficam em Configurações → Configuração técnica → Ajustes finos.
+
+O que foi descartado continua visível em **Descartados**, com o motivo, e pode ser restaurado. A mesma
+conferência roda de novo na hora de lançar: se a cobrança já existir, a tela pergunta antes de lançar
+mesmo assim. Boletos que chegam ao mesmo tempo do mesmo fornecedor são conferidos um de cada vez.
+
+### Regras da empresa
+
+Em **Configurações → Regras** há um campo de texto livre. As regras entram na conferência de cada
+documento (nas instruções, nunca misturadas ao conteúdo do documento) e respondem três perguntas:
+
+- **Descartar?** (“Ignorar boletos da Empresa X”) → vai para Descartados com “Descartado por regra”.
+- **Exige conferência?** (“Boletos acima de R$ 5.000 passam por conferência”) → não é lançado sozinho.
+- **Pode lançar de novo?** (“Boletos da Escola Y com juros podem ser lançados de novo”) → única forma
+  de um reenvio com juros não ser tratado como repetido. Uma cobrança idêntica (mesmo boleto, ou mesmo
+  valor e vencimento) continua sendo descartada mesmo com essa regra.
+
+Se houver regras e a conferência falhar, nada é lançado sozinho.
 
 ## Produção (Docker)
 

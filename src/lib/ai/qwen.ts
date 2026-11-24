@@ -13,6 +13,12 @@ export type QwenExtraction = {
   beneficiario_documento: string | null;
   valor: number | null;
   vencimento: string | null;
+  /** Valor antes de juros e multa; null quando não há acréscimo. */
+  valor_original: number | null;
+  /** Vencimento anterior, quando a cobrança foi reemitida com nova data. */
+  vencimento_original: string | null;
+  /** O documento é o reenvio de uma cobrança já vencida. */
+  reemissao: boolean;
   banco: string | null;
   nosso_numero: string | null;
   linha_digitavel: string | null;
@@ -102,8 +108,17 @@ export async function extractWithQwen(input: QwenInput): Promise<QwenExtraction>
   if (!raw) throw new Error("A leitura do documento não retornou conteúdo.");
 
   const parsed = JSON.parse(raw) as QwenExtraction;
+  const originalValue = Number(parsed.valor_original);
+  const originalDueDate =
+    typeof parsed.vencimento_original === "string" ? parsed.vencimento_original.slice(0, 10) : "";
   return {
     ...parsed,
+    valor_original:
+      parsed.valor_original !== null && Number.isFinite(originalValue) && originalValue > 0
+        ? originalValue
+        : null,
+    vencimento_original: /^\d{4}-\d{2}-\d{2}$/.test(originalDueDate) ? originalDueDate : null,
+    reemissao: parsed.reemissao === true,
     confianca: Math.max(0, Math.min(1, Number(parsed.confianca ?? 0))),
     campos_incertos: Array.isArray(parsed.campos_incertos) ? parsed.campos_incertos : [],
   };
