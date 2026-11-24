@@ -1,5 +1,5 @@
 import type { Locator as PwLocator } from "playwright";
-import { BrowserSession, LinkGoneError, UnavailableError, CaptchaError, type CapturedPdf, type ElementInfo } from "./browser";
+import { BrowserSession, LinkGoneError, UnavailableError, type CapturedPdf, type ElementInfo } from "./browser";
 import { isPdfBuffer, safeFetch } from "./net-guard";
 import { isVariableSegment, renderTemplate, templatizeUrl, type UrlVars } from "./pattern";
 import type { ElementLocator, RecipeStep } from "./steps";
@@ -80,7 +80,10 @@ export type RunResult = {
   trace: string[];
 };
 
-/** Executa uma receita do zero. Lança CaptchaError / UnavailableError / LinkGoneError / StepFailedError. */
+/**
+ * Executa uma receita do zero. Lança CaptchaError (captcha que não deu para resolver) /
+ * UnavailableError / LinkGoneError / StepFailedError.
+ */
 export async function runRecipe(steps: RecipeStep[], vars: UrlVars): Promise<RunResult> {
   const trace: string[] = [];
 
@@ -103,6 +106,7 @@ export async function runRecipe(steps: RecipeStep[], vars: UrlVars): Promise<Run
   }
 
   const session = await BrowserSession.open();
+  const log = (line: string) => trace.push(line);
   try {
     for (const [index, step] of steps.entries()) {
       const label = `passo ${index + 1} (${step.op})`;
@@ -111,9 +115,12 @@ export async function runRecipe(steps: RecipeStep[], vars: UrlVars): Promise<Run
         trace.push(`${step.op} ${url}`);
         await session.goto(url);
       } else if (step.op === "click") {
-        const locator = await findInFrames(session, step.target);
+        let locator = await findInFrames(session, step.target);
+        // Um captcha que não existia quando o caminho foi gravado pode estar escondendo o botão.
+        if (!locator && (await session.passCaptcha(log))) {
+          locator = await findInFrames(session, step.target);
+        }
         if (!locator) {
-          if (await session.detectCaptcha()) throw new CaptchaError("A página pediu captcha.");
           throw new StepFailedError(`${label}: elemento não encontrado ${JSON.stringify(step.target)}.`);
         }
         trace.push(`click ${JSON.stringify(step.target)}`);
@@ -126,15 +133,18 @@ export async function runRecipe(steps: RecipeStep[], vars: UrlVars): Promise<Run
         trace.push(`wait ${step.ms}`);
         await session.page.waitForTimeout(Math.min(step.ms, 10_000));
         await session.settle(200);
+      } else if (step.op === "captcha") {
+        // Se desta vez o site não pediu captcha, o passo não faz nada.
+        await session.passCaptcha(log, { expected: true });
       }
     }
     await session.settle(1000);
 
+    // Sem PDF: se um captcha estiver travando a página, resolve e dá tempo de o boleto sair.
+    if (session.pdfs.length === 0 && (await session.passCaptcha(log))) await session.settle(2000);
+
     const pdf = session.pdfs[session.pdfs.length - 1];
-    if (!pdf) {
-      if (await session.detectCaptcha()) throw new CaptchaError("A página pediu captcha.");
-      throw new StepFailedError("A receita terminou sem baixar nenhum PDF.");
-    }
+    if (!pdf) throw new StepFailedError("A receita terminou sem baixar nenhum PDF.");
     return { pdf, trace };
   } finally {
     await session.close();

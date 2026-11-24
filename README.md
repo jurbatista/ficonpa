@@ -28,8 +28,14 @@ Muitos e-mails não trazem o PDF anexado, só um link (Asaas, Gerencianet/Efí, 
    montada a partir do link (ex.: `asaas.com/i/{id}` → `asaas.com/b/pdf/{id}`), vira um download
    direto, sem navegador. Só depois de validado ele é salvo.
 5. Se a validação falhar, o agente tenta de novo com o erro como contexto (padrão: 3 tentativas).
-   **Captcha, link expirado e site fora do ar interrompem na hora**; fora do ar é re-tentado mais tarde.
-6. O PDF obtido entra no mesmo fluxo dos anexos (triagem, fornecedor, lançamento).
+   **Link expirado e site fora do ar interrompem na hora**; fora do ar é re-tentado mais tarde.
+6. **Captcha**: com `TWOCAPTCHA_API_KEY` definida (no `worker`), o desafio é enviado ao
+   [2Captcha](https://2captcha.com), a resposta é entregue à página e a busca continua; o ponto do
+   captcha fica gravado no caminho aprendido e é resolvido de novo a cada boleto. Atende reCAPTCHA v2
+   (inclusive invisível e Enterprise) e Cloudflare Turnstile. Só a origem do site (`https://dominio/`)
+   e a chave pública do captcha vão para o serviço — o link da cobrança não. Sem a chave, com outro
+   tipo de captcha, ou se o serviço falhar (sem saldo, chave recusada), o link fica esperando uma pessoa.
+7. O PDF obtido entra no mesmo fluxo dos anexos (triagem, fornecedor, lançamento).
 
 Tela **Boletos por link** (aberta pelo aviso na página inicial ou por Configurações): links que não
 baixaram, teste de um link na hora e sites conhecidos. Pela linha de comando:
@@ -119,6 +125,7 @@ os serviços:
 | `APP_ENCRYPTION_KEY` | Criptografia de tokens e senhas IMAP |
 | `APP_URL` | URL pública usada em redirecionamentos |
 | `ATTACHMENT_DIR` | Pasta dos PDFs (no Docker: `/app/data/attachments`) |
+| `TWOCAPTCHA_API_KEY` | Opcional. Chave do 2Captcha para resolver captcha nos links de boleto (usada pelo `worker`) |
 
 ## Conta Azul
 

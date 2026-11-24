@@ -1,6 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { emailLinks, emailMessages, linkRecipes } from "@/db/schema";
+import { SOLVER_KEY_REFUSED, SOLVER_NO_BALANCE } from "./captcha";
 
 /** Registros antigos podem trazer termos internos; a tela só mostra linguagem neutra. */
 const NEUTRAL: [RegExp, string][] = [
@@ -27,6 +28,8 @@ function plainLinkReason(status: string, error: string | null): string | null {
     case "RESOLVING":
       return "Abrindo o link…";
     case "CAPTCHA":
+      // Quando o que falta é do nosso lado (saldo ou chave), diz o que resolver.
+      if (error === SOLVER_NO_BALANCE || error === SOLVER_KEY_REFUSED) return error;
       return "O site pede uma confirmação que só uma pessoa consegue fazer.";
     case "NEEDS_HUMAN":
       return error && /pede dados|login/i.test(error)

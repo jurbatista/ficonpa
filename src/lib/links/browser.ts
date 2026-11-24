@@ -1,4 +1,15 @@
 import type { Browser, BrowserContext, Frame, Page, Response } from "playwright";
+import {
+  applyToken,
+  captchaSolverEnabled,
+  CaptchaSolverError,
+  challengeKey,
+  findCaptcha,
+  isTurnstileApi,
+  solveChallenge,
+  solverFailureReason,
+  TURNSTILE_RENDER_HOOK,
+} from "./captcha";
 import { assertSafeUrl, isPdfBuffer, isPublicHost } from "./net-guard";
 
 /**
@@ -37,6 +48,12 @@ export type PageSnapshot = {
   elements: ElementInfo[];
 };
 
+const USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36";
+
+/** Uma página não pede mais captchas do que isto numa visita; acima disso algo está errado. */
+const MAX_CAPTCHAS_PER_SESSION = 2;
+
 let sharedBrowser: Browser | null = null;
 
 async function getBrowser(): Promise<Browser> {
@@ -67,6 +84,8 @@ export class BrowserSession {
   page!: Page;
   private context!: BrowserContext;
   private pending: Promise<unknown>[] = [];
+  private solvedCaptchas = new Set<string>();
+  private captchaAttempts = 0;
 
   static async open(): Promise<BrowserSession> {
     const session = new BrowserSession();
@@ -77,8 +96,7 @@ export class BrowserSession {
       locale: "pt-BR",
       timezoneId: "America/Sao_Paulo",
       viewport: { width: 1280, height: 900 },
-      userAgent:
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36",
+      userAgent: USER_AGENT,
     });
     // O tsx/esbuild (usado pelo worker) injeta __name() em funções nomeadas; o código
     // enviado via page.evaluate roda no navegador, onde esse helper não existe.
@@ -94,6 +112,14 @@ export class BrowserSession {
       if (url.protocol !== "https:" && url.protocol !== "http:") return route.abort("blockedbyclient");
       if (["media", "font"].includes(request.resourceType())) return route.abort("blockedbyclient");
       if (!(await isPublicHost(url.hostname))) return route.abort("blockedbyclient");
+      if (isTurnstileApi(url) && captchaSolverEnabled()) {
+        try {
+          const response = await route.fetch();
+          return await route.fulfill({ response, body: `${await response.text()}\n${TURNSTILE_RENDER_HOOK}` });
+        } catch {
+          return route.continue().catch(() => undefined);
+        }
+      }
       return route.continue();
     });
 
@@ -201,8 +227,14 @@ export class BrowserSession {
       const element = await frame.frameElement().catch(() => null);
       const box = element ? await element.boundingBox().catch(() => null) : null;
       if (!box || box.width < 50 || box.height < 50) continue;
-      const onScreen = box.x < viewport.width && box.y < viewport.height * 3 && box.x + box.width > 0;
+      // O reCAPTCHA invisível deixa o frame do desafio escondido, fora da tela, até precisar dele.
+      const onScreen =
+        box.x < viewport.width &&
+        box.x + box.width > 0 &&
+        box.y < viewport.height * 3 &&
+        box.y + box.height > 0;
       if (!onScreen) continue;
+      if (!(await element!.isVisible().catch(() => true))) continue;
       const isChallenge = /bframe|\/challenge|hcaptcha\.com\/captcha|challenges\.cloudflare\.com|arkoselabs|funcaptcha/i.test(url);
       // Caixa "não sou um robô" tem ~304x78; o selo invisível tem 256x60.
       const isCheckbox = /anchor/i.test(url) && box.width >= 290;
@@ -215,6 +247,61 @@ export class BrowserSession {
     return /just a moment|attention required|checking your browser|não sou um robô|nao sou um robo|i'?m not a robot|verify you are human|confirme que você é humano/i.test(
       `${title}\n${text}`,
     );
+  }
+
+  /**
+   * Passa pelo captcha da página, quando há um e o serviço que resolve está configurado.
+   * Devolve true se resolveu agora; false se não havia nada a resolver (ou já foi resolvido
+   * nesta visita — o widget continua na tela depois da resposta). Lança CaptchaError quando
+   * o captcha trava a página e não dá para resolver.
+   *
+   * `expected`: quem chama já sabe que há captcha (passo gravado na receita, ou o
+   * próprio sistema de busca desistiu por causa dele), mesmo sem desafio visível.
+   */
+  async passCaptcha(log: (line: string) => void, options: { expected?: boolean } = {}): Promise<boolean> {
+    const visible = await this.detectCaptcha();
+    if (!visible && !options.expected) return false;
+
+    const challenge = await findCaptcha(this.page).catch(() => null);
+    if (!challenge) {
+      if (!visible) return false;
+      throw new CaptchaError(
+        captchaSolverEnabled()
+          ? "A página exige um tipo de captcha que o sistema não resolve."
+          : "A página exige captcha.",
+      );
+    }
+
+    const key = challengeKey(challenge);
+    if (this.solvedCaptchas.has(key)) return false;
+    if (!captchaSolverEnabled()) throw new CaptchaError("A página exige captcha.");
+    if (this.captchaAttempts >= MAX_CAPTCHAS_PER_SESSION) {
+      throw new CaptchaError("A página continua pedindo captcha.");
+    }
+    this.captchaAttempts += 1;
+
+    log(`captcha encontrado (${challenge.kind}${challenge.invisible ? ", invisível" : ""}); resolvendo`);
+    const started = Date.now();
+    let token: string;
+    try {
+      token = await solveChallenge(challenge, USER_AGENT);
+    } catch (error) {
+      if (error instanceof CaptchaSolverError) {
+        log(`captcha não resolvido: ${error.message}`);
+        throw new CaptchaError(solverFailureReason(error));
+      }
+      throw error;
+    }
+    // A resposta leva alguns segundos: a página pode ter recarregado o widget nesse meio-tempo.
+    const current = await findCaptcha(this.page).catch(() => null);
+    const target = current && challengeKey(current) === key ? current : challenge;
+    const applied = await applyToken(target, token).catch(() => ({ fields: 0, callbacks: 0 }));
+    this.solvedCaptchas.add(key);
+    log(
+      `captcha resolvido em ${Math.round((Date.now() - started) / 1000)}s (campos preenchidos: ${applied.fields}, retornos chamados: ${applied.callbacks})`,
+    );
+    await this.settle(1500);
+    return true;
   }
 
   /** Marca os elementos clicáveis de todos os frames e devolve uma descrição compacta. */

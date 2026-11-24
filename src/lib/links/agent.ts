@@ -87,6 +87,10 @@ const TOOLS = [
   },
 ] as const;
 
+/** Depois de resolvido, a caixa do captcha continua desmarcada na tela: avisa para seguir em frente. */
+const CAPTCHA_SOLVED_NOTE =
+  'o sistema já resolveu o captcha ("não sou um robô") desta página; a caixa pode continuar desmarcada. Siga para o boleto, sem desistir por captcha';
+
 type ToolCall = { name: string; args: Record<string, unknown> };
 
 function describeElement(element: ElementInfo): string {
@@ -230,7 +234,12 @@ export async function learnPath(input: {
 
       if (turn === maxActions) break;
 
-      if (await session.detectCaptcha()) throw new CaptchaError("A página exige captcha.");
+      // Captcha: resolve (quando o serviço está configurado) e olha a página de novo.
+      if (await session.passCaptcha((line) => log.push(line))) {
+        steps.push({ op: "captcha" });
+        history.push(CAPTCHA_SOLVED_NOTE);
+        continue;
+      }
 
       const snapshot = await session.snapshot();
       const screenshot = input.useScreenshots === false ? null : await session.screenshot();
@@ -239,6 +248,11 @@ export async function learnPath(input: {
       if (action.name === "desistir") {
         const motivo = String(action.args.motivo ?? "outro");
         const detalhe = String(action.args.detalhe ?? "");
+        if (motivo === "captcha" && (await session.passCaptcha((line) => log.push(line), { expected: true }))) {
+          steps.push({ op: "captcha" });
+          history.push(CAPTCHA_SOLVED_NOTE);
+          continue;
+        }
         log.push(`busca interrompida: ${motivo} ${detalhe}`);
         if (motivo === "captcha") throw new CaptchaError(`Captcha: ${detalhe}`);
         if (motivo === "sem_boleto") throw new LinkGoneError(`Sem boleto disponível: ${detalhe}`);

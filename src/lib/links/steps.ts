@@ -14,13 +14,16 @@ export type RecipeStep =
   | { op: "goto"; url: string }
   | { op: "fetchPdf"; url: string }
   | { op: "click"; target: ElementLocator; description?: string }
-  | { op: "wait"; ms: number };
+  | { op: "wait"; ms: number }
+  /** A página pediu captcha neste ponto; na repetição ele é resolvido se aparecer de novo. */
+  | { op: "captcha" };
 
 export function describeSteps(steps: RecipeStep[]): string {
   return steps
     .map((step) => {
       if (step.op === "goto" || step.op === "fetchPdf") return `${step.op} ${step.url}`;
       if (step.op === "click") return `clicar ${step.target.text ? `"${step.target.text}"` : step.target.css ?? step.target.hrefContains ?? "?"}`;
+      if (step.op === "captcha") return "resolver captcha";
       return `esperar ${step.ms}ms`;
     })
     .join(" → ");
